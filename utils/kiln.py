@@ -3,7 +3,7 @@ import threading
 import gpiozero
 import time
 
-class kiln:
+class Controller:
 
     def __init__(self):
         self.trigger=gpiozero.OutputDevice(pin=4) # Confirm pin number
@@ -77,7 +77,7 @@ class kiln:
 
 if __name__=='__main__':
     
-    kiln=kiln()
+    kiln=Controller()
     kiln.pause=True
     kiln.temp=25
     kiln.bound=3
