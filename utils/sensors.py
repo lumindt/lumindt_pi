@@ -7,12 +7,38 @@ import time
 def map(x,xmin,xmax,ymin,ymax):
     return (x-xmin)*(ymax-ymin)/(xmax-xmin)+ymin
 
+class EMA:
+
+    def __init__(self,alpha=1,min_alpha=0.5):
+        self.alpha=alpha
+        self.min_alpha=sorted([0,min_alpha,0.5])[1] # [min_alpha] can be (0 <-> 0.5)
+        self.value=None
+
+    def filter(self,now):
+        if self.value is None:
+            self.value=now
+        else:
+            self.value=self.alpha * now + (1.0-self.alpha) * self.value
+        return self.value
+
+    @property
+    def alpha(self):
+        return self.alpha
+
+    @alpha.setter
+    def alpha(self,new_alpha):
+        self.alpha=sorted([self.min_alpha,new_alpha,1.0])[1] # [alpha] can be ([min_alpha] <-> 1.0)
+
 class ADS1115:
 
     def __init__(self,addr=0x48):
         bus=busio.I2C(board.SCL,board.SDA)
-        self.ads=ADS.ADS1115(bus,address=addr)
-        self.ads.gain=2/3
+        self.ads=ADS.ADS1115(
+            bus,
+            address=addr,
+            gain=2/3,
+            data_rate=64
+            )
         self.a0=AnalogIn(self.ads,ADS.P0)
         self.a1=AnalogIn(self.ads,ADS.P1)
         self.a2=AnalogIn(self.ads,ADS.P2)

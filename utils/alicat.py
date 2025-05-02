@@ -4,8 +4,8 @@ import time
 class Controller:
 
     # Next steps:
+        # initialize/control engineering units
         # gas_dict information including conversions
-        # ramp rate to avoid TMF error
         # totalizer configuration
 
     # Constants only for hydrogen, be careful when using other gases
@@ -29,7 +29,6 @@ class Controller:
         self._send_command('TC 1 -1 0 -1 7 0') # Improve with custom totalizer functionality (for now sets up TC1)
         self._send_command('TC 2 1') # Polling relies on knowing only one totalizer is active
         self.gas_dict={'H2':6,'O2':11}
-        self.gas='H2'
 
     def _send_command(self, command):
         full_command = f'{self.address}{command}\r'.encode('utf-8')
@@ -67,6 +66,15 @@ class Controller:
     @setpoint.setter
     def setpoint(self,value):
         self._send_command(f'LS {value}')
+
+    @property
+    def ramp(self):
+        resp=self._send_command('SR')
+        return float(resp[1])
+
+    @ramp.setter
+    def ramp(self,new_ramp):
+        self._send_command(f'SR {new_ramp} 4') # rate is tied to units of mass flow rate units; set to zero to disable
 
     ### GAS ###
     
@@ -109,13 +117,13 @@ if __name__=='__main__':
 
     FC=Controller()
     FC.totalizer_reset()
-    # print(FC._send_command('GS'))
-    print(FC.gas)
-    FC.gas='ABC'
-    print(FC.gas)
-    
+    print(FC._send_command('SR'))
+
+    t_start=time.time()
     while True:
         try:
+            print('--------------------')
+            print(f'{time.time()-t_start:.2f}')
             print(FC.poll())
             time.sleep(1)
         except:

@@ -14,78 +14,62 @@ class Controller:
         self.trigger.off()
 
         self.control_temp=100
-        self.control_bound=5
-        self.control_lock=threading.Lock()
+        self.control_bound=5 # Only a lower bound
         self.control_pause=True
-        self.control_stop=False
-        self.control_thread=threading.Thread(target=self.run,daemon=True)
-        self.control_thread.start()
-
-    def run(self):
-        while not self.control_stop:
-            with self.control_lock:
-                if not self.control_pause:
-                    lo=self.control_temp-self.control_bound
-                    hi=self.control_temp+self.control_bound
-                    if self.internal_temp>hi:
-                        self.trigger.off()
-                    elif self.internal_temp<lo:
-                        self.trigger.on()
-                else:
-                    self.trigger.off()
-            time.sleep(0.1)
 
     def update(self,active_temp):
-        with self.control_lock:
-            self.internal_temp=active_temp
+        '''
+        Run this function repeatedly in the script
+        Pass the desired control temperature
+        '''
+        if not self.control_pause:
+            lo=self.control_temp-self.control_bound
+            hi=self.control_temp
+            if active_temp>hi:
+                self.trigger.off()
+            elif active_temp<lo:
+                self.trigger.on()
+        else:
+            self.trigger.off()
+
                     
     @property
     def setpoint(self):
-        with self.control_lock:
-            return self.control_temp
+        return self.control_temp
 
     @setpoint.setter
     def setpoint(self,value):
-        with self.control_lock:
-            self.control_temp=min([value,500])
+        self.control_temp=min([value,500])
 
     @property
     def bound(self):
-        with self.control_lock:
-            return self.control_bound
+        return self.control_bound
 
     @bound.setter
     def bound(self,value):
-        with self.control_lock:
-            self.control_bound=value
+        self.control_bound=value
 
     @property
     def pause(self):
-        with self.control_lock:
-            return self.control_pause
+        return self.control_pause
         
     @pause.setter
     def pause(self,value):
-        with self.control_lock:
-            self.control_pause=bool(value)
+        if value: self.trigger.off()
+        self.control_pause=bool(value)
 
     @property
     def status(self):
-        with self.control_lock:
-            return self.trigger.value
+        return bool(self.trigger.value)
 
     def stop(self):
-        with self.control_lock:
-            self.control_stop=True
         self.trigger.off()
         self.trigger.close()
-        self.control_thread.join()
 
 if __name__=='__main__':
     
     kiln=Controller()
-    kiln.pause=True
-    kiln.temp=25
+    kiln.setpoint=25
     kiln.bound=3
 
     ads=ADS1115()
@@ -94,12 +78,15 @@ if __name__=='__main__':
     while True:
         try:
             t_now=time.time()
-            kiln.update(ads.temperature(1,offset=1.25))
+            k_temp=ads.temperature(1,offset=1.25)
+            v_temp=ads.temperature(2,offset=1.25)
+            v_pres=ads.pressure(0)
+            kiln.update(k_temp)
             string=(
                 f'time:     {t_now-t_start:0.2f}\n'
-                f'pres0:    {ads.pressure(0):0.2f}\n'
-                f'temp1:    {ads.temperature(1,offset=1.25):0.2f} (CONTROL VARIABLE)\n'
-                f'temp2:    {ads.temperature(2,offset=1.25):0.2f}\n'
+                f'pres0:    {v_pres:0.2f}\n'
+                f'temp1:    {k_temp:0.2f} (CONTROL VARIABLE)\n'
+                f'temp2:    {v_temp:0.2f}\n'
                 f'status:   {kiln.status}\n'
                 f'pause:    {kiln.pause}\n'
                 )
