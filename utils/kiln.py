@@ -1,9 +1,13 @@
-from sensors import ADS1115
+from utils.sensors import ADS1115
 import threading
 import gpiozero
 import time
 
 class Controller:
+
+    # Next Steps:
+        # Remove threading
+        # Tie control to update function
 
     def __init__(self):
         self.trigger=gpiozero.OutputDevice(pin=4) # Confirm pin number
@@ -71,9 +75,11 @@ class Controller:
             return self.trigger.value
 
     def stop(self):
-        self.control_stop=True
+        with self.control_lock:
+            self.control_stop=True
         self.trigger.off()
         self.trigger.close()
+        self.control_thread.join()
 
 if __name__=='__main__':
     
