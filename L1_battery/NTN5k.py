@@ -1,0 +1,590 @@
+import can
+import time
+import threading
+from datetime import datetime, timedelta, timezone
+
+'''
+Improvements
+- Function for changing EEPROM
+- Develop desired abstracted control framework
+'''
+
+class Device:
+
+    def __init__(self,bus,addr=0,debug=False):
+        self.bus=bus
+        self.recv_ID=0x000C0400+addr
+        self.send_ID=0x000C0500+addr
+        self.debug=debug
+
+        self._local_lock=threading.Lock()
+        self._can_lock=threading.Lock()
+        self._power_thread=threading.Thread(target=self.update,daemon=True)
+        self._end=threading.Event()
+
+        self._mode=0
+        self._input_power=1000
+        self._status={}
+        self._values={}
+
+        self.EEPROM()
+        self.setup()
+        self._power_thread.start()
+
+        ###################################
+        ##### DO THREADING FOR DEVICE #####
+        ###################################
+        
+    # ===== UTILS =============================================================
+        
+    def _send(self,code,values=[]):
+        msg=can.Message(
+            is_extended_id=True,
+            arbitration_id=self.send_ID,
+            data=list(code.to_bytes(2,'little'))+values,
+            is_rx=False
+            )
+        try:
+            if self.debug: print(msg)
+            self.bus.send(msg)
+        except:
+            print('Message NOT sent')
+
+    def _recv(self,timeout=1.0):
+        try:
+            msg=self.bus.recv(timeout=timeout)
+            if self.debug: print(msg)
+        except:
+            print('Message NOT received')
+            return None
+        if msg==None:
+            return None
+        addr=msg.arbitration_id-self.recv_ID
+        code=hex(int.from_bytes(msg.data[:2],'little'))
+        values=msg.data[2:]
+        return [addr,code,values]
+
+    def _get(self,code):
+        with self._can_lock:
+            self._send(code=code)
+            resp=self._recv()
+        time.sleep(0.1)
+        if self.debug:
+            # print(f'Message Name:  {resp.name}')
+            print(f'Address Check: {addr} == {resp[0]}')
+            print(f'Command Check: {hex(code)} == {resp[1]}')
+        return resp[2]
+
+    def _set(self,code,value,factor,vmin,vmax):
+        try:
+            data=list(int(sorted([vmin,value,vmax])[1]/factor).to_bytes(2,'little'))
+            with self._can_lock:
+                self._send(code=code,values=data)
+        except:
+            print(f'INVALID ENTRY: code {hex(code)}')
+
+    # ===== READ VALUE ========================================================
+
+    # ----- INPUT -----
+
+    def READ_VIN(self):
+        '''AC INPUT VOLTAGE'''
+        regs=self._get(code=0x0050)
+        return 0.1*int.from_bytes(regs,'little')
+
+    def READ_IIN(self):
+        '''AC INPUT CURRENT'''
+        regs=self._get(code=0x0053)
+        return 0.1*int.from_bytes(regs,'little')
+
+    def READ_FIN(self):
+        '''AC INPUT FREQUENCY'''
+        regs=self._get(code=0x0056)
+        return 0.01*int.from_bytes(regs,'little')
+
+    # ----- OUTPUT -----
+
+    def READ_VOUT(self):
+        '''AC OUTPUT VOLTAGE'''
+        regs=self._get(code=0x0108)
+        return 0.1*int.from_bytes(regs,'little')
+
+    def READ_IOUT(self):
+        '''AC OUTPUT CURRENT'''
+        regs=self._get(code=0x012B)
+        return 0.1*int.from_bytes(regs,'little')
+
+    def READ_FOUT(self):
+        '''AC OUTPUT FREQUENCY'''
+        regs=self._get(code=0x0105)
+        return 0.01*int.from_bytes(regs,'little')
+
+    def READ_PCNT(self):
+        '''AC OUTPUT LOAD PERCENTAGE'''
+        regs=self._get(code=0x010B)
+        return int.from_bytes(regs,'little') # Percent
+
+    def READ_WATT(self):
+        '''AC OUTPUT WATTAGE'''
+        hi=self._get(code=0x010E)
+        lo=self._get(code=0x010F)
+        return 0.1*(int.from_bytes(hi,'little')<<8 | int.from_bytes(lo,'little'))
+
+    def READ_VA(self):
+        '''AC OUTPUT APPARENT POWER'''
+        hi=self._get(code=0x0114)
+        lo=self._get(code=0x0115)
+        return 0.1*(int.from_bytes(hi,'little')<<8 | int.from_bytes(lo,'little'))
+
+    # ----- BATTERY -----
+
+    def READ_VBAT(self):
+        '''BATTERY VOLTAGE'''
+        regs=self._get(code=0x011A)
+        return 0.01*int.from_bytes(regs,'little')
+
+    def READ_IBAT(self):
+        '''BATTERY CURRENT'''
+        regs=self._get(code=0x011B)
+        if self.debug: print(regs)
+        return 0.01*int.from_bytes(regs,'little',signed=True)
+
+    # ----- MISC -----
+
+    def READ_TMP(self):
+        '''INTERNAL TEMPERATURE'''
+        regs=self._get(code=0x0062)
+        return 0.1*int.from_bytes(regs,'little')
+
+    # ===== READ/WRITE VALUE ==================================================
+
+    # ----- CHARGE CURVE -----
+
+    def CURVE_CC(self,value=None):
+        '''[EEPROM] CHARGE CURVE CONSTANT CURRENT SETTING'''
+        if value == None:
+            regs=self._get(code=0x00B0)
+            return 0.01*int.from_bytes(regs,'little')
+        else:
+            self._set(code=0x00B0,value=value,factor=0.01,vmin=14,vmax=70)
+
+    def CURVE_CC_TIMEOUT(self,value=None):
+        '''CHARGE CURVE CONSTANT CURRENT TIMEOUT (MINUTES)'''
+        if value == None:
+            regs=self._get(code=0x00B5)
+            return int.from_bytes(regs,'little')
+        else:
+            self._set(code=0x00B5,value=value,factor=1,vmin=60,vmax=64800)
+
+    def CURVE_CV(self,value=None):
+        '''[EEPROM] CHARGE CURVE CONSTANT VOLTAGE SETTING'''
+        if value == None:
+            regs=self._get(code=0x00B1)
+            return 0.01*int.from_bytes(regs,'little')
+        else:
+            self._set(code=0x00B1,value=value,factor=0.01,vmin=48,vmax=56)
+
+    def CURVE_CV_TIMEOUT(self,value=None):
+        '''CHARGE CURVE CONSTANT VOLTAGE TIMEOUT (MINUTES)'''
+        if value == None:
+            regs=self._get(code=0x00B6)
+            return int.from_bytes(regs,'little')
+        else:
+            self._set(code=0x00B6,value=value,factor=1,vmin=60,vmax=64800)
+
+    def CURVE_FV(self,value=None):
+        '''[EEPROM] CHARGE CURVE FLOAT VOLTAGE SETTING'''
+        if value == None:
+            regs=self._get(code=0x00B2)
+            return 0.01*int.from_bytes(regs,'little')
+        else:
+            self._set(code=0x00B2,value=value,factor=0.01,vmin=40,vmax=60)
+
+    def CURVE_FV_TIMEOUT(self,value=None):
+        '''CHARGE CURVE FLOAT VOLTAGE TIMEOUT (MINUTES)'''
+        if value == None:
+            regs=self._get(code=0x00B7)
+            return int.from_bytes(regs,'little')
+        else:
+            self._set(code=0x00B7,value=value,factor=1,vmin=60,vmax=64800)
+
+    def CURVE_TC(self,value=None):
+        '''[EEPROM] CHARGE CURVE FLOAT CROSSOVER (TAPER) CURRENT SETTING'''
+        if value == None:
+            regs=self._get(code=0x00B3)
+            return 0.01*int.from_bytes(regs,'little')
+        else:
+            self._set(code=0x00B3,value=value,factor=0.01,vmin=1.4,vmax=21)
+
+    # ----- BATTERY TRIGGERS -----
+
+    def BAT_ALM_VOLT(self,value=None):
+        '''[EEPROM] BATTERY LOW VOLTAGE ALARM'''
+        if value == None:
+            regs=self._get(code=0x00B9)
+            return 0.01*int.from_bytes(regs,'little')
+        else:
+            self._set(code=0x00B9,value=value,factor=0.01,vmin=37.6,vmax=50)
+
+    def BAT_SHDN_VOLT(self,value=None):
+        '''[EEPROM] BATTERY LOW VOLTAGE SHUTDOWN'''
+        if value == None:
+            regs=self._get(code=0x00BA)
+            return 0.01*int.from_bytes(regs,'little')
+        else:
+            self._set(code=0x00BA,value=value,factor=0.01,vmin=36.8,vmax=48)
+
+    def BAT_RCHG_VOLT(self,value=None):
+        '''[EEPROM] BATTERY RECHARGE THRESHOLD VOLTAGE'''
+        if value == None:
+            regs=self._get(code=0x00BB)
+            return 0.01*int.from_bytes(regs,'little')
+        else:
+            self._set(code=0x00BB,value=value,factor=0.01,vmin=36.8,vmax=60)
+
+    # ===== CONFIG ============================================================
+
+    def CURVE_CONFIG(self,**new_config):
+        '''
+        HI  [  0  |  0  |  0  |  0  |  0  |FVTOE|CVTOE|CCTOE]
+        LO  [  0  | STGS|  0  |  0  |    TCS    |    CUVS   ]
+        '''
+        code=0x00B4
+        [lo,hi]=self._get(code=code)
+        config_dict={
+            'CUVS':     (lo & 0b00000011),      # Charge Curve Preset
+            'TCS':      (lo & 0b00001100) >> 2, # Temperature Compensation
+            'STGS':     (lo & 0b01000000) >> 6, # 2 or 3 Stage Charging
+            'CCTOE':    (hi & 0b00000001),      # CC Timeout Enable
+            'CVTOE':    (hi & 0b00000010) >> 1, # CV Timeout Enable
+            'FVTOE':    (hi & 0b00000100) >> 2, # FV Timeout Enable
+        }
+        if new_config=={}:
+            return config_dict
+        else:
+            config_dict |= new_config
+            new_lo=config_dict['CUVS'] | config_dict['TCS']<<2 | config_dict['STGS']<<6
+            new_hi=config_dict['CCTOE'] | config_dict['CVTOE']<<1 | config_dict['FVTOE']<<2
+            with self._can_lock:
+                self._send(code=code,values=[new_lo,new_hi])
+            return config_dict
+
+    def SYSTEM_CONFIG(self,**new_config):
+        '''
+        HI  [  0  |  0  |  0  |  0  |  0  |EEP_OFF| EEP_CONFIG]
+        LO  [  0  |  0  |  0  |  0  |  0  |   0   |  0  |  0  ]
+        '''
+        code=0x00C2
+        [lo,hi]=self._get(code=code)
+        config_dict={
+            'EEP_CONFIG':   (hi & 0b00000011),      # Write Time Delay
+            'EEP_OFF':      (hi & 0b00000100) >> 2, # Disable Writing
+        }
+        if new_config=={}:
+            return config_dict
+        else:
+            config_dict |= new_config
+            new_lo=0
+            new_hi=config_dict['EEP_CONFIG'] | config_dict['EEP_OFF']<<2
+            with self._can_lock:
+                self._send(code=code,values=[new_lo,new_hi])
+            return config_dict
+
+    def INV_OPERATION(self,**new_config):
+        '''
+        HI  [  0  |  0  |  0  |  0  |  0  |   0   |  0  |   0   ]
+        LO  [  0  |  0  |  0  |  0  |  0  | CHG_EN|OP_EN|OP_CTRL]
+        '''
+        code=0x0100
+        [lo,hi]=self._get(code=code)
+        config_dict={
+            'OP_CTRL':  (lo & 0b00000001),      # Enable Output (Requires OP_EN)
+            'OP_EN':    (lo & 0b00000010) >> 1, # Enable OP_CTRL
+            'CHG_EN':   (lo & 0b00000100) >> 2, # Enable Charger
+        }
+        if new_config=={}:
+            return config_dict
+        else:
+            config_dict |= new_config
+            new_lo=config_dict['OP_CTRL'] | config_dict['OP_EN']<<1 | config_dict['CHG_EN']<<2
+            new_hi=0
+            with self._can_lock:
+                self._send(code=code,values=[new_lo,new_hi])
+            return config_dict
+
+    def INV_CONFIG(self,**new_config):
+        '''
+        HI  [  0  |  0  |  0  |  0  |  0  |  0  |  0  |  0  ]
+        LO  [  0  |  0  |  0  |  0  |  0  |  0  |  INV_PRIO ]
+        '''
+        code=0x0101
+        [lo,hi]=self._get(code=code)
+        config_dict={
+            'INV_PRIO':  (lo & 0b00000011),     # Energy Saving Mode
+        }
+        if new_config=={}:
+            return config_dict
+        else:
+            config_dict |= new_config
+            new_lo=config_dict['INV_PRIO']
+            new_hi=0
+            with self._can_lock:
+                self._send(code=code,values=[new_lo,new_hi])
+            return config_dict
+
+    # ===== STATUS ============================================================
+
+    def CHG_STATUS(self):
+        '''
+        HI  [FVTOF|CVTOF|CCTOF|  0  |  0  |NTCER|  0  |  0  ]
+        LO  [  0  |  0  |  0  |  0  | FVM | CVM | CCM |FULLM]
+        '''
+        code=0x00B8
+        [lo,hi]=self._get(code=code)
+        config_dict={
+            'FULLM':    (lo & 0b00000001),      # Battery Full
+            'CCM':      (lo & 0b00000010) >> 1, # Constant Current Mode
+            'CVM':      (lo & 0b00000100) >> 2, # Constant Voltage Mode
+            'FVM':      (lo & 0b00001000) >> 3, # Float Voltage Mode
+            'NTCER':    (hi & 0b00000100) >> 2, # Temperature Compensation On
+            'CCTOF':    (hi & 0b00100000) >> 5, # CC Timeout Flag
+            'CVTOF':    (hi & 0b01000000) >> 6, # CV Timeout Flag
+            'FVTOF':    (hi & 0b10000000) >> 7, # FV Timeout Flag
+        }
+        return config_dict
+
+    def INV_STATUS(self):
+        '''
+        HI  [  0  |     0     |   0   |    0    |   0   |   0   | INV_PHASE ]
+        LO  [  0  |Bat_Low_ALM| SAVING| SOLAR_EN| CHG_ON| UTI_OK| BYP | INV ]
+        '''
+        code=0x011D
+        [lo,hi]=self._get(code=code)
+        config_dict={
+            'INV':          (lo & 0b00000001),      # Inverter Mode
+            'BYP':          (lo & 0b00000010) >> 1, # Bypass Mode
+            'UTI_OK':       (lo & 0b00000100) >> 2, # Utility Power Connected
+            'CHG_ON':       (lo & 0b00001000) >> 3, # Charger On
+            'SOLAR_EN':     (lo & 0b00010000) >> 4, # Solar Charger On
+            'SAVING':       (lo & 0b00100000) >> 5, # Energy Saving Mode
+            'Bat_Low_ALM':  (lo & 0b01000000) >> 6, # Battery Low Flag
+            'INV_PHASE':    (hi & 0b00000011),      # Inverter Phase
+        }
+        return config_dict
+
+    def INV_FAULT(self):
+        '''
+        HI  [   0   |  0  |   0   |INV_Fault|Bat_OVP|Bat_UVP|FAN_FAIL|  SHDN  ]
+        LO  [EEP_Err| SCP |INV_OVP| INV_UVP |  OTP  |OLP_150| OLP_115| OLP_100]
+        '''
+        code=0x011E
+        [lo,hi]=self._get(code=code)
+        config_dict={
+            'OLP_100':      (lo & 0b00000001),      # >100% Power Overload
+            'OLP_115':      (lo & 0b00000010) >> 1, # >115% Power Overload
+            'OLP_150':      (lo & 0b00000100) >> 2, # >150% Power Overload
+            'OTP':          (lo & 0b00001000) >> 3, # Over Temperature
+            'INV_UVP':      (lo & 0b00010000) >> 4, # Inverter Under Voltage
+            'INV_OVP':      (lo & 0b00100000) >> 5, # Inverter Over Voltage
+            'SCP':          (lo & 0b01000000) >> 6, # Short Circuit
+            'EEP_Err':      (lo & 0b10000000) >> 7, # EEPROM Error
+            'SHDN':         (hi & 0b00000001),      # System Shutdown
+            'FAN_FAIL':     (hi & 0b00000010) >> 1, # Fan Error
+            'Bat_UVP':      (hi & 0b00000100) >> 2, # Battery Under Voltage
+            'Bat_OVP':      (hi & 0b00001000) >> 3, # Battery Over Voltage
+            'INV_Fault':    (hi & 0b00010000) >> 4, # Inverter Fault
+        }
+        return config_dict
+
+    # ===== CUSTOM FUNCTIONS ==================================================
+
+    # ----- STARTUP -----
+
+    def EEPROM(self):
+        # Disable EEPROM; set immediate EEPROM saving when enabled
+        self.SYSTEM_CONFIG(EEP_OFF=1,EEP_CONFIG=0)
+        # Check desired settings
+        preset=[
+            self.CURVE_FV()==54.6,
+            self.CURVE_TC()==7,
+            self.BAT_ALM_VOLT()==50,
+            self.BAT_SHDN_VOLT()==48,
+            self.BAT_RCHG_VOLT()==50,
+        ]
+        # Conditional actions
+        if all(preset):
+            print('EEPROM already set')
+        else:
+            print('Setting EEPROM...')
+            self.CURVE_FV(value=54.6)
+            self.CURVE_TC(value=7)
+            self.BAT_ALM_VOLT(value=50)
+            self.BAT_SHDN_VOLT(value=48)
+            self.BAT_RCHG_VOLT(value=50)
+            # Turn on EEPROM briefly to save desired settings
+            self.SYSTEM_CONFIG(EEP_OFF=0)
+            time.sleep(0.1)
+            self.SYSTEM_CONFIG(EEP_OFF=1)
+            time.sleep(0.1)
+            print('EEPROM settings saved')
+            print('Warning: Do not save to EEPROM too often - Limited saves')
+
+    def setup(self):
+        # Two stage charging only
+        self.CURVE_CONFIG(STGS=1)
+        # Enable output control; disable output and charging
+        self.INV_CONFIG(OP_EN=1,OP_CTRL=0,CHG_EN=0)
+        # Set initial input power
+        ibat=self._input_power/56
+        self.CURVE_CC(value=ibat)
+        self.CURVE_CV(value=56)
+
+    # ----- Operation -----
+
+    def mode(self,new_mode=0):
+        with self._local_lock:
+            if new_mode==1: # BATTERY CHARGE
+                self.INV_OPERATION(OP_CTRL=0)
+                time.sleep(0.2)
+                self.INV_OPERATION(CHG_EN=1)
+                self._mode=new_mode
+            elif new_mode==2: # BATTERY DISCHARGE AND BYPASS
+                self.INV_OPERATION(CHG_EN=0)
+                time.sleep(0.2)
+                self.INV_OPERATION(OP_CTRL=1)
+                self._mode=new_mode
+            else: # OFF
+                self.INV_OPERATION(CHG_EN=0,OP_CTRL=0)
+                self._mode=0
+
+    # ----- Power Thread -----
+
+    def update(self):
+        while True:
+            try:
+                prev=time.time()
+                wait=0.5
+                vbat=self.READ_VBAT()
+                ibat=self.READ_IBAT()
+                with self._local_lock:
+                    p_desired=self._input_power
+                    mode=self._mode
+                    self._status|=self.CHG_STATUS()|self.INV_STATUS()|self.INV_FAULT()
+                    ccm=self._status['CCM']
+                    cvm=self._status['CVM']
+                    p_error=(p_desired-vbat*ibat)/p_desired
+                    self._values|={'VBAT':vbat,'IBAT':ibat,'ERR':p_error}
+                if abs(p_error) > 0.01 and mode==1:
+                    if cvm: self.CURVE_CV(value=round((p_desired*vbat/ibat)**0.5,2))
+                    if ccm: self.CURVE_CC(value=round(p_desired/vbat,2))
+                    wait=5
+                while time.time()-prev<wait:
+                    pass
+            except Exception as e:
+                print(e)
+            if self._end.is_set(): break
+
+
+    
+    # def screen(self):
+    #     wid=12
+    #     string=f'\n{"":-^{wid*5}}\n{datetime.now().strftime("%H:%M:%S.%f")[:-3]: ^{wid*5}}\n{"":-^{wid*5}}\n\n'
+    #     chg_status=self.CHG_STATUS()
+    #     inv_status=self.INV_STATUS()
+    #     inv_fault=self.INV_FAULT()
+    #     string+=f'{"SYSTEM STATUS": ^{wid*5}}\n{"":-^{wid*5}}\n'
+    #     # string+=f'{inv_status["SAVING"]: ^{wid*5}}\n{"":-^{wid*5}}\n'
+    #     string+=f'{"MODE": ^{wid-1}}|{"POWER": ^{wid-1}}|{"INVERTER": ^{wid-1}}|{"BATTERY": ^{wid-1}}|{"TEMP": ^{wid-1}}|\n{"":-^{wid*5}}\n'
+    #     string+=(
+    #         f'{"CHARGE" if inv_status["CHG_ON"] else "INVERT" if inv_status["INV"] else "BYPASS" if inv_status["BYP"] else "OFF": ^{wid-1}}|'
+    #         f'{">150%" if inv_fault["OLP_150"] else ">115%" if inv_fault["OLP_115"] else ">100%" if inv_fault["OLP_100"] else "NORMAL": ^{wid-1}}|'
+    #         f'{"FAULT" if inv_fault["INV_Fault"] else "OVP" if inv_fault["INV_OVP"] else "UVP" if inv_fault["INV_UVP"] else "NORMAL": ^{wid-1}}|'
+    #         f'{"OVP" if inv_fault["Bat_OVP"] else "UVP" if inv_fault["Bat_UVP"] else "LOW" if inv_status["Bat_Low_ALM"] else "FULL" if chg_status["FULLM"] else "NORMAL": ^{wid-1}}|'
+    #         f'{f"{self.READ_TMP():0.2f} C": ^{wid-1}}|\n\n'
+    #         )
+    #     string+=f'{"SYSTEM FAULTS": ^{wid*5}}\n{"":-^{wid*5}}\n'
+    #     string+=f'{"SHORT": ^{wid-1}}|{"OVER TEMP": ^{wid-1}}|{"EEPROM": ^{wid-1}}|{"FAN": ^{wid-1}}|{"SHUTDOWN": ^{wid-1}}|\n{"":-^{wid*5}}\n'
+    #     string+=(
+    #         f'{"FAULT" if inv_fault["SCP"] else "NORMAL": ^{wid-1}}|'
+    #         f'{"FAULT" if inv_fault["OTP"] else "NORMAL": ^{wid-1}}|'
+    #         f'{"FAULT" if inv_fault["EEP_Err"] else "NORMAL": ^{wid-1}}|'
+    #         f'{"FAULT" if inv_fault["FAN_FAIL"] else "NORMAL": ^{wid-1}}|'
+    #         f'{"FAULT" if inv_fault["SHDN"] else "NORMAL": ^{wid-1}}|\n\n'
+    #         )
+    #     if self._mode==1: # BATTERY CHARGE
+    #         vbat=self.READ_VBAT()
+    #         ibat=self.READ_IBAT()
+    #         pbat=vbat*ibat
+    #         self.update(vbat,ibat,chg_status["CCM"])
+    #         string+=f'{"CHARGING STATUS": ^{wid*5}}\n{"":-^{wid*5}}\n'
+    #         string+=f'{"PHASE": ^{wid-1}}|{"VOLTAGE": ^{wid-1}}|{"CURRENT": ^{wid-1}}|{"POWER": ^{wid-1}}|{"COMMAND": ^{wid-1}}|\n{"":-^{wid*5}}\n'
+    #         string+=(
+    #             f'{"CCM" if chg_status["CCM"] else "CVM" if chg_status["CVM"] else "FVM" if chg_status["FVM"] else "OFF": ^{wid-1}}|'
+    #             f'{f"{vbat:0.2f} V": ^{wid-1}}|'
+    #             f'{f"{ibat:0.2f} A": ^{wid-1}}|'
+    #             f'{f"{pbat:0.2f} W": ^{wid-1}}|'
+    #             f'{f"{self._input_power} W": ^{wid-1}}|\n\n'
+    #             )
+    #     elif self._mode==2: # BATTERY DISCHARGE AND BYPASS
+    #         pcnt=self.READ_PCNT()
+    #         vout=self.READ_VOUT()
+    #         iout=self.READ_IOUT()
+    #         pout=self.READ_WATT()
+    #         rout=self.READ_VA()
+    #         string+=f'{"OUTPUT STATUS": ^{wid*5}}\n{"":-^{wid*5}}\n'
+    #         string+=f'{"LOAD%": ^{wid-1}}|{"VOLTAGE": ^{wid-1}}|{"CURRENT": ^{wid-1}}|{"POWER": ^{wid-1}}|{"REACTIVE": ^{wid-1}}|\n{"":-^{wid*5}}\n'
+    #         string+=(
+    #             f'{f"{pcnt:0.2f} %": ^{wid-1}}|'
+    #             f'{f"{vout:0.2f} V": ^{wid-1}}|'
+    #             f'{f"{iout:0.2f} A": ^{wid-1}}|'
+    #             f'{f"{pout:0.2f} W": ^{wid-1}}|'
+    #             f'{f"{rout:0.2f} VA": ^{wid-1}}|\n\n'
+    #             )
+    #     string+=f'{"":-^{wid*5}}'
+    #     print(string)
+
+    def close(self):
+        self._end.set()
+        self._power_thread.join()
+        self.bus.shutdown()
+        print('Ending')
+
+def printout(d=None):
+    string='\n----------\n'
+    string+=f'{datetime.now(timezone(timedelta(hours=-7))).strftime("%H:%M:%S.%f")[:-3]}\n'
+    string+='----------\n'
+    for k,v in i.items():
+        string+=f'{k: >12} - {v:}\n'
+    string+='----------'
+    print(string)
+
+
+if __name__ == '__main__':
+    bus = can.interface.Bus(interface='socketcan', channel='can1', bitrate=250000)
+    dev=Device(bus=bus,debug=False)
+    start=time.time()
+    try:
+        while(True):
+            try:
+                with dev._local_lock:
+                    printout([dev._status,dev._values])
+                time.sleep(1)
+            except KeyboardInterrupt:
+                new_mode=int(input('\nChange mode?\n'))
+                with dev._local_lock:
+                    if new_mode==1: 
+                        try:
+                            new_power=int(input('\nNew Charge Power (W)?\n'))
+                            dev._input_power=new_power
+                        except:
+                            print(f'\nMaintain Power: {dev._input_power}\n')
+                dev.mode(new_mode=new_mode)
+    except KeyboardInterrupt:
+        print('\nClosing')
+    except Exception as e:
+        print(e)
+    finally:
+        dev.mode(new_mode=0)
+        time.sleep(0.2)
+        dev.close()
+
