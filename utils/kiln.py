@@ -10,7 +10,7 @@ class Controller:
         # Tie control to update function
 
     def __init__(self):
-        self.trigger=gpiozero.OutputDevice(pin=4) # Confirm pin number
+        self.trigger=gpiozero.OutputDevice(pin=23) # Confirm pin number
         self.trigger.off()
 
         self.control_temp=100
@@ -78,9 +78,9 @@ if __name__=='__main__':
     while True:
         try:
             t_now=time.time()
-            k_temp=ads.temperature(1,offset=1.25)
-            v_temp=ads.temperature(2,offset=1.25)
-            v_pres=ads.pressure(0)
+            k_temp=ads.temperature(0)
+            v_temp=ads.temperature(1)
+            v_pres=ads.pressure(2)
             kiln.update(k_temp)
             string=(
                 f'time:     {t_now-t_start:0.2f}\n'

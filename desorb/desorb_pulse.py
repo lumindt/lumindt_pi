@@ -16,7 +16,7 @@ pulse_max=15
 pulse=0
 pulse_flow=0
 
-file='outputs/test.csv'
+file='outputs/FeTi_Molina_Desorb_5_6_2025.csv'
 with open(file, 'w', newline='') as f:
     writer=csv.writer(f)
     writer.writerow([
@@ -49,6 +49,10 @@ with open(file, 'w', newline='') as f:
 
             if pulse==pulse_max:
                 FC.setpoint=pulse_flow
+                pulse=0
+            else:
+                FC.setpoint=0
+                pulse+=1
             kiln.update(k_temp)
             
             writer.writerow([
@@ -81,6 +85,8 @@ with open(file, 'w', newline='') as f:
                 f'FC M Flow:    {FCdata["M"]:0.6f} g/s\n'
                 f'FC Setpoint:  {FCdata["S"]:0.6f} g/s\n'
                 f'FC Total:     {FCdata["A"]:0.6f} grams\n'
+                f'Pulse Count:  {pulse} / {pulse_max}\n'
+                f'Pulse Flow:   {pulse_flow:0.6f} g/s\n'
                 f'FC Avg Flow:  {avgflow:0.6f} g/s\n'
                 f'FC Errors:    {FCdata["E"]}\n'
                 )

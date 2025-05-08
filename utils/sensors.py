@@ -78,11 +78,16 @@ if __name__=='__main__':
     while True:
         try:
             t_start=time.time()
+            # string=(
+            #     f'A0:   {ads.voltage[0]:.3f}V   {ads.temperature(0,offset=1.25):.3f}C   {ads.pressure(0):.3f}barg\n'
+            #     f'A1:   {ads.voltage[1]:.3f}V   {ads.temperature(1,offset=1.25):.3f}C   {ads.pressure(1):.3f}barg\n'
+            #     f'A2:   {ads.voltage[2]:.3f}V   {ads.temperature(2,offset=1.25):.3f}C   {ads.pressure(2):.3f}barg\n'
+            #     f'A3:   {ads.voltage[3]:.3f}V   {ads.temperature(3,offset=1.25):.3f}C   {ads.pressure(3):.3f}barg\n'
+            # )
             string=(
-                f'A0:   {ads.voltage[0]:.3f}V   {ads.temperature(0,offset=1.25):.3f}C   {ads.pressure(0):.3f}barg\n'
-                f'A1:   {ads.voltage[1]:.3f}V   {ads.temperature(1,offset=1.25):.3f}C   {ads.pressure(1):.3f}barg\n'
-                f'A2:   {ads.voltage[2]:.3f}V   {ads.temperature(2,offset=1.25):.3f}C   {ads.pressure(2):.3f}barg\n'
-                f'A3:   {ads.voltage[3]:.3f}V   {ads.temperature(3,offset=1.25):.3f}C   {ads.pressure(3):.3f}barg\n'
+                f'T_K:  {ads.temperature(0):.3f} C\n'
+                f'T_V:  {ads.temperature(1):.3f} C\n'
+                f'P_V:  {ads.pressure(2):.3f} barG\n'
             )
             print(string)
             while time.time()-t_start<1:
