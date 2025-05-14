@@ -13,7 +13,7 @@ class Controller:
     H2_SCCM2G=8.988e-5
     H2_SLPM2GPS=0.08988/60
 
-    def __init__(self, port='/dev/ttyUSB0', baudrate=19200, address='A', timeout=1):
+    def __init__(self, port='/dev/ttyUSB0', baudrate=19200, address='A', timeout=0.5):
         self.address = address.upper()
         try:
             self.ser = serial.Serial(
@@ -34,7 +34,8 @@ class Controller:
         full_command = f'{self.address}{command}\r'.encode('utf-8')
         self.ser.write(full_command)
         time.sleep(0.1)
-        return self.ser.readline().decode('utf-8').strip().split()
+        resp=self.ser.read_until(b'\r').decode('utf-8').strip().split()
+        return resp
 
     ### POLLING ###
 
@@ -117,7 +118,7 @@ if __name__=='__main__':
 
     FC=Controller()
     FC.totalizer_reset()
-    print(FC._send_command('SR'))
+    print(FC._send_command('LCGD'))
 
     t_start=time.time()
     while True:
