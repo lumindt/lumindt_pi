@@ -12,11 +12,11 @@ FC.ramp=0
 
 ads=ADS1115()
 
-pulse_max=15
+pulse_max=20
 pulse=0
 pulse_flow=0
 
-file='outputs/FeTi_Molina_Desorb_5_6_2025.csv'
+file='outputs/FeTi_Molina_Desorb_5_13_2025.csv'
 with open(file, 'w', newline='') as f:
     writer=csv.writer(f)
     writer.writerow([
@@ -41,9 +41,9 @@ with open(file, 'w', newline='') as f:
     while True:
         try:
             t_now=time.time()
-            v_pres=ads.pressure(0)
-            k_temp=ads.temperature(1,offset=1.25)
-            v_temp=ads.temperature(2,offset=1.25)
+            v_pres=ads.pressure(2)
+            k_temp=ads.temperature(0)
+            v_temp=ads.temperature(1)
             FCdata=FC.poll()
             avgflow=FCdata['A']/(t_now-t_ref)
 
