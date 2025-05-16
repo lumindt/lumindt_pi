@@ -1,3 +1,3 @@
 outputs/*
 !outputs/
-pycache/*
+__pycache__/
