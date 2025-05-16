@@ -124,9 +124,11 @@ if __name__=='__main__':
     while True:
         try:
             print('--------------------')
-            print(f'{time.time()-t_start:.2f}')
+            t_now=time.time()
+            print(f'{t_now-t_start:.2f}')
             print(FC.poll())
-            time.sleep(1)
+            while time.time()-t_now<1:
+                pass
         except:
             FC.close()
             break
