@@ -2,6 +2,9 @@ import can
 import cantools
 import time
 from datetime import datetime
+import subprocess
+
+# CAN bus setup: sudo ip link set can0 up type can bitrate 500000
 
 '''
 CAN EXT frames must add 0x80000000 to address in dbc file
@@ -135,15 +138,17 @@ class Device(can.Listener):
 
 if __name__ == '__main__':
     try:
+        subprocess.run("sudo ip link set can0 down", shell=True, check=True) # Set CAN0 down
+        subprocess.run("sudo ip link set can0 up type can bitrate 500000", shell=True, check=True) # Set CAN0 up
         bus = can.interface.Bus(interface='socketcan', channel='can0', bitrate=500000)
         filters=[
-            {"can_id": 0x320, "can_mask": 0x1FFFFF00, "extended": True},
+            # {"can_id": 0x320, "can_mask": 0x1FFFFF00, "extended": True},
             # {"can_id": 0x322, "can_mask": 0x1FFFFFFF, "extended": True},
-            # {"can_id": 0x351, "can_mask": 0x7FF, "extended": False}, # Limits
-            # {"can_id": 0x355, "can_mask": 0x7FF, "extended": False}, # States
-            # {"can_id": 0x356, "can_mask": 0x7FF, "extended": False}, # Values
-            # {"can_id": 0x359, "can_mask": 0x7FF, "extended": False}, # Flags
-            # {"can_id": 0x35C, "can_mask": 0x7FF, "extended": False}, # Requests
+            {"can_id": 0x351, "can_mask": 0x7FF, "extended": False}, # Limits
+            {"can_id": 0x355, "can_mask": 0x7FF, "extended": False}, # States
+            {"can_id": 0x356, "can_mask": 0x7FF, "extended": False}, # Values
+            {"can_id": 0x359, "can_mask": 0x7FF, "extended": False}, # Flags
+            {"can_id": 0x35C, "can_mask": 0x7FF, "extended": False}, # Requests
             # {"can_id": 0x9691FFFF, "can_mask": 0x1F000000, "extended": True},
             # {"can_id": 0x96900001, "can_mask": 0x1FFFFFFF, "extended": True},
             # {"can_id": 0x96910001, "can_mask": 0x1FFFFFFF, "extended": True},
@@ -164,8 +169,8 @@ if __name__ == '__main__':
             # {"can_id": 0x96a00001, "can_mask": 0x1FFFFFFF, "extended": True},
             # {"can_id": 0x96a10001, "can_mask": 0x1FFFFFFF, "extended": True},
         ]
-        # bus.set_filters(filters)
-        dbc=cantools.database.load_file('SG48200T_v4.dbc')
+        bus.set_filters(filters)
+        dbc=cantools.database.load_file('lumindt_pi/L1_battery/SG48200T.dbc')
         dev=Device(db=dbc,debug=True)
         notifier=can.Notifier(bus,[dev])
     except:
@@ -179,8 +184,8 @@ if __name__ == '__main__':
     start=time.time()
     while(True):
         try:
-            # dev.screen()
-            dev.dump()
+            dev.screen()
+            # dev.dump()
             time.sleep(1)
         except KeyboardInterrupt:
             print('\nClosing')

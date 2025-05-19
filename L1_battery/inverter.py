@@ -2,11 +2,14 @@ import can
 import time
 import threading
 from datetime import datetime, timedelta, timezone
+import subprocess
+
 
 '''
 Improvements
 - Function for changing EEPROM
 - Develop desired abstracted control framework
+- Eliminate threading
 '''
 
 class Device:
@@ -17,23 +20,14 @@ class Device:
         self.send_ID=0x000C0500+addr
         self.debug=debug
 
-        self._local_lock=threading.Lock()
-        self._can_lock=threading.Lock()
-        self._power_thread=threading.Thread(target=self.update,daemon=True)
-        self._end=threading.Event()
-
         self._mode=0
         self._input_power=1000
-        self._status={}
-        self._values={}
+        self._printout={}
+        self._charge={}
+        self._fault={}
 
         self.EEPROM()
         self.setup()
-        self._power_thread.start()
-
-        ###################################
-        ##### DO THREADING FOR DEVICE #####
-        ###################################
         
     # ===== UTILS =============================================================
         
@@ -65,21 +59,18 @@ class Device:
         return [addr,code,values]
 
     def _get(self,code):
-        with self._can_lock:
-            self._send(code=code)
-            resp=self._recv()
+        self._send(code=code)
+        resp=self._recv()
         time.sleep(0.1)
         if self.debug:
             # print(f'Message Name:  {resp.name}')
-            print(f'Address Check: {addr} == {resp[0]}')
             print(f'Command Check: {hex(code)} == {resp[1]}')
         return resp[2]
 
     def _set(self,code,value,factor,vmin,vmax):
         try:
             data=list(int(sorted([vmin,value,vmax])[1]/factor).to_bytes(2,'little'))
-            with self._can_lock:
-                self._send(code=code,values=data)
+            self._send(code=code,values=data)
         except:
             print(f'INVALID ENTRY: code {hex(code)}')
 
@@ -265,8 +256,7 @@ class Device:
             config_dict |= new_config
             new_lo=config_dict['CUVS'] | config_dict['TCS']<<2 | config_dict['STGS']<<6
             new_hi=config_dict['CCTOE'] | config_dict['CVTOE']<<1 | config_dict['FVTOE']<<2
-            with self._can_lock:
-                self._send(code=code,values=[new_lo,new_hi])
+            self._send(code=code,values=[new_lo,new_hi])
             return config_dict
 
     def SYSTEM_CONFIG(self,**new_config):
@@ -286,8 +276,7 @@ class Device:
             config_dict |= new_config
             new_lo=0
             new_hi=config_dict['EEP_CONFIG'] | config_dict['EEP_OFF']<<2
-            with self._can_lock:
-                self._send(code=code,values=[new_lo,new_hi])
+            self._send(code=code,values=[new_lo,new_hi])
             return config_dict
 
     def INV_OPERATION(self,**new_config):
@@ -308,8 +297,7 @@ class Device:
             config_dict |= new_config
             new_lo=config_dict['OP_CTRL'] | config_dict['OP_EN']<<1 | config_dict['CHG_EN']<<2
             new_hi=0
-            with self._can_lock:
-                self._send(code=code,values=[new_lo,new_hi])
+            self._send(code=code,values=[new_lo,new_hi])
             return config_dict
 
     def INV_CONFIG(self,**new_config):
@@ -328,8 +316,7 @@ class Device:
             config_dict |= new_config
             new_lo=config_dict['INV_PRIO']
             new_hi=0
-            with self._can_lock:
-                self._send(code=code,values=[new_lo,new_hi])
+            self._send(code=code,values=[new_lo,new_hi])
             return config_dict
 
     # ===== STATUS ============================================================
@@ -404,6 +391,7 @@ class Device:
         # Disable EEPROM; set immediate EEPROM saving when enabled
         self.SYSTEM_CONFIG(EEP_OFF=1,EEP_CONFIG=0)
         # Check desired settings
+        # Be careful about changing presets, if the preset value is out of the range, it 
         preset=[
             self.CURVE_FV()==54.6,
             self.CURVE_TC()==7,
@@ -442,47 +430,69 @@ class Device:
     # ----- Operation -----
 
     def mode(self,new_mode=0):
-        with self._local_lock:
-            if new_mode==1: # BATTERY CHARGE
-                self.INV_OPERATION(OP_CTRL=0)
-                time.sleep(0.2)
-                self.INV_OPERATION(CHG_EN=1)
-                self._mode=new_mode
-            elif new_mode==2: # BATTERY DISCHARGE AND BYPASS
-                self.INV_OPERATION(CHG_EN=0)
-                time.sleep(0.2)
-                self.INV_OPERATION(OP_CTRL=1)
-                self._mode=new_mode
-            else: # OFF
-                self.INV_OPERATION(CHG_EN=0,OP_CTRL=0)
-                self._mode=0
+        if new_mode==1: # BATTERY CHARGE
+            self.INV_OPERATION(OP_EN=1,OP_CTRL=0)
+            time.sleep(0.2)
+            self.INV_OPERATION(CHG_EN=1)
+            self._mode=new_mode
+        elif new_mode==2: # BATTERY DISCHARGE AND BYPASS
+            self.INV_OPERATION(CHG_EN=0)
+            time.sleep(0.2)
+            self.INV_OPERATION(OP_EN=1,OP_CTRL=1)
+            self._mode=new_mode
+        else: # OFF
+            self.INV_OPERATION(CHG_EN=0,OP_EN=1,OP_CTRL=0)
+            self._mode=0
 
     # ----- Power Thread -----
 
     def update(self):
-        while True:
-            try:
-                prev=time.time()
-                wait=0.5
-                vbat=self.READ_VBAT()
-                ibat=self.READ_IBAT()
-                with self._local_lock:
-                    p_desired=self._input_power
-                    mode=self._mode
-                    self._status|=self.CHG_STATUS()|self.INV_STATUS()|self.INV_FAULT()
-                    ccm=self._status['CCM']
-                    cvm=self._status['CVM']
-                    p_error=(p_desired-vbat*ibat)/p_desired
-                    self._values|={'VBAT':vbat,'IBAT':ibat,'ERR':p_error}
-                if abs(p_error) > 0.01 and mode==1:
-                    if cvm: self.CURVE_CV(value=round((p_desired*vbat/ibat)**0.5,2))
-                    if ccm: self.CURVE_CC(value=round(p_desired/vbat,2))
-                    wait=5
-                while time.time()-prev<wait:
-                    pass
-            except Exception as e:
-                print(e)
-            if self._end.is_set(): break
+        vbat=self.READ_VBAT()
+        ibat=self.READ_IBAT()
+        pbat=vbat*ibat
+        mode=self._mode
+        chg=self.CHG_STATUS()
+        self._printout|=(
+            chg|
+            self.INV_STATUS()|
+            # self.INV_FAULT()|
+            # self.INV_OPERATION()|
+            {}
+        )
+        cvm=chg['CVM']
+        ccm=chg['CCM']
+        flm=chg['FULLM']
+        self._printout |= {
+            'MODE':mode,
+            'VBAT':vbat,
+            'IBAT':ibat,
+            'PBAT':pbat,
+        }
+        if mode==1:
+            p_desired=self._input_power
+            if p_desired==0:
+                p_error=0
+            else:
+                p_error=(p_desired-pbat)/p_desired
+            self._printout |= {
+                'PCMD':p_desired,
+                'PERR':p_error,
+            }
+            if abs(p_error) > 0.01 and not flm:
+                if cvm:
+                    ides=p_desired/vbat
+                    vdes=p_desired/ides if ides!=0 else 52 # BE CAREFUL NOT TO DIVIDE BY ZERO
+                    self.CURVE_CV(value=round(vdes,2))
+                    # self.CURVE_CC(value=ibat)
+                elif ccm:
+                    self.CURVE_CC(value=round(p_desired/vbat,2))
+                    # self.CURVE_CV(value=vbat)
+                time.sleep(5)
+        else:
+            self._printout |= {
+                'PCMD':0,
+                'PERR':0,
+            }
 
 
     
@@ -544,8 +554,6 @@ class Device:
     #     print(string)
 
     def close(self):
-        self._end.set()
-        self._power_thread.join()
         self.bus.shutdown()
         print('Ending')
 
@@ -553,31 +561,47 @@ def printout(d=None):
     string='\n----------\n'
     string+=f'{datetime.now(timezone(timedelta(hours=-7))).strftime("%H:%M:%S.%f")[:-3]}\n'
     string+='----------\n'
-    for k,v in i.items():
-        string+=f'{k: >12} - {v:}\n'
+    for k,v in d.items():
+        string+=f'{k: >12}: {v:<10.3f}\n'
     string+='----------'
     print(string)
 
 
 if __name__ == '__main__':
-    bus = can.interface.Bus(interface='socketcan', channel='can1', bitrate=250000)
+    subprocess.run("sudo ip link set can1 down", shell=True, check=True) # Set CAN1 down
+    subprocess.run("sudo ip link set can1 up type can bitrate 250000", shell=True, check=True) # Set CAN1 up
+    bus = can.interface.Bus(interface='socketcan', channel='can1', bitrate=250000) # Set up CAN bus
     dev=Device(bus=bus,debug=False)
     start=time.time()
     try:
         while(True):
             try:
-                with dev._local_lock:
-                    printout([dev._status,dev._values])
+                dev.update()
+                printout(dev._printout)
                 time.sleep(1)
             except KeyboardInterrupt:
-                new_mode=int(input('\nChange mode?\n'))
-                with dev._local_lock:
-                    if new_mode==1: 
-                        try:
-                            new_power=int(input('\nNew Charge Power (W)?\n'))
-                            dev._input_power=new_power
-                        except:
-                            print(f'\nMaintain Power: {dev._input_power}\n')
+                cmd_string=(
+                    '\nChange mode?\n'
+                    f'Current mode: {dev._mode}\n'
+                    '0 -> Standby\n'
+                    '1 -> Charge\n'
+                    '2 -> Discharge\n'
+                    'Press ENTER to end script\n'
+                )
+                new_mode=int(input(cmd_string))
+                if new_mode==1: 
+                    try:
+                        power_string=(
+                            '\nNew Charge Power (W)?\n\n'
+                            f'{"MIN": ^10}|{"COMMAND": ^10}|{"MAX": ^10}\n'
+                            f'{"":-^10}|{"":-^10}|{"":-^10}\n'
+                            f'{57.6*14: ^10}|{dev._input_power: ^10.2f}|{4200: ^10}\n\n'
+                            'New Entry? (Press ENTER to maintain)\n'
+                        )
+                        new_power=int(input(power_string))
+                        dev._input_power=new_power
+                    except:
+                        print(f'\nMaintain Power: {dev._input_power}\n')
                 dev.mode(new_mode=new_mode)
     except KeyboardInterrupt:
         print('\nClosing')
