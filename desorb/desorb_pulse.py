@@ -12,11 +12,11 @@ FC.ramp=0
 
 ads=ADS1115()
 
-pulse_max=20
+pulse_max=30
 pulse=0
 pulse_flow=0
 
-file='outputs/FeTi_Molina_Desorb_5_13_2025.csv'
+file='outputs/FeTi_Molina_Desorb_5_20_2025_v2.csv'
 with open(file, 'w', newline='') as f:
     writer=csv.writer(f)
     writer.writerow([
