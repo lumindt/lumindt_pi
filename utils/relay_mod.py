@@ -1,23 +1,25 @@
 import RPi.GPIO as GPIO
-import time
 
 class RelayBoard:
     def __init__(self):
-        # Relay to GPIO pin mapping (BCM mode)
+        # Relay to GPIO pin mapping
         self.relay_pins = {
-            'R1': 17,  # R1
-            'R2': 27,  # R2
-            'R3': 22,  # R3
-            'R4': 23   # R4
+            'R1': 17,  # V1
+            'R2': 27,  # V1
+            'R3': 22,  # V2
+            'R4': 23   # V2
         }
 
-        # Setup GPIO
+        # Voltage groups
+        self.v1_relays = ['R1', 'R2']
+        self.v2_relays = ['R3', 'R4']
+
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
 
         for pin in self.relay_pins.values():
             GPIO.setup(pin, GPIO.OUT)
-            GPIO.output(pin, GPIO.LOW)  # Start with all relays OFF
+            GPIO.output(pin, GPIO.LOW)
 
     def on(self, relay: str):
         if relay not in self.relay_pins:
@@ -48,35 +50,47 @@ class RelayBoard:
     def cleanup(self):
         GPIO.cleanup()
 
+    # NEW: Turn on all relays tied to V1 (3V)
+    def v1_on(self):
+        for relay in self.v1_relays:
+            self.on(relay)
+
+    def v1_off(self):
+        for relay in self.v1_relays:
+            self.off(relay)
+
+    # NEW: Turn on all relays tied to V2 (5V)
+    def v2_on(self):
+        for relay in self.v2_relays:
+            self.on(relay)
+
+    def v2_off(self):
+        for relay in self.v2_relays:
+            self.off(relay)
+
     def run_cli(self):
-        print("Relay Control CLI: enter relay name (R1–R4) and ON/OFF/TGL. Type Q to quit.")
+        print("Relay Control CLI (type 'V1 ON', 'R2 OFF', etc.)")
         try:
             while True:
-                cmd = input("Command (e.g. 'R1 ON'): ").strip().upper()
+                cmd = input("Command: ").strip().upper()
                 if cmd == 'Q':
                     break
-                parts = cmd.split()
-                if len(parts) != 2:
-                    print("Invalid command. Format: <relay> <ON/OFF/TGL>")
-                    continue
-                relay_name = parts[0]
-                action = parts[1]
-
-                if action == 'ON':
-                    self.on(relay_name)
-                elif action == 'OFF':
-                    self.off(relay_name)
-                elif action == 'TGL':
-                    self.toggle(relay_name)
+                if cmd in ['V1 ON', 'V1 OFF']:
+                    getattr(self, f"v1_{cmd.split()[1].lower()}")()
+                elif cmd in ['V2 ON', 'V2 OFF']:
+                    getattr(self, f"v2_{cmd.split()[1].lower()}")()
                 else:
-                    print("Unknown action. Use ON, OFF, or TGL.")
-                print("Relay states:", self.status())
-
+                    parts = cmd.split()
+                    if len(parts) == 2 and parts[0] in self.relay_pins and parts[1] in ['ON', 'OFF']:
+                        getattr(self, parts[1].lower())(parts[0])
+                    else:
+                        print("Invalid command.")
         except KeyboardInterrupt:
             pass
         finally:
             self.all_off()
             self.cleanup()
+
 
 if __name__ == '__main__':
     board = RelayBoard()
