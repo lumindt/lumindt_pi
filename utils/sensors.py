@@ -71,6 +71,15 @@ class ADS1115:
             return None
         return (volt-offset)/0.005
 
+def rpi_temp():
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+            temp_str = f.readline()
+            temp_c = int(temp_str) / 1000.0  # Convert millidegree to degree
+            return temp_c
+    except FileNotFoundError:
+        return None
+
 if __name__=='__main__':
     
     ads=ADS1115(addr=0x48)
