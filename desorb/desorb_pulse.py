@@ -16,7 +16,7 @@ pulse_max=30
 pulse=0
 pulse_flow=0
 
-file='outputs/FeTi_Molina_Desorb_5_20_2025_v2.csv'
+file='outputs/ZhenAn_B2V1T3_Desorb1.csv'
 with open(file, 'w', newline='') as f:
     writer=csv.writer(f)
     writer.writerow([
@@ -42,8 +42,8 @@ with open(file, 'w', newline='') as f:
         try:
             t_now=time.time()
             v_pres=ads.pressure(2)
-            k_temp=ads.temperature(0)
-            v_temp=ads.temperature(1)
+            k_temp=ads.temperature(1)
+            v_temp=ads.temperature(3)
             FCdata=FC.poll()
             avgflow=FCdata['A']/(t_now-t_ref)
 

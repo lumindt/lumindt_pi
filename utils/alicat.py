@@ -118,7 +118,7 @@ if __name__=='__main__':
 
     FC=Controller()
     FC.totalizer_reset()
-    print(FC._send_command('LCG 0'))
+    print(FC._send_command('TC 1'))
 
     t_start=time.time()
     while True:

@@ -83,10 +83,12 @@ def rpi_temp():
 if __name__=='__main__':
     
     ads=ADS1115(addr=0x48)
+    # ads.ads.data_rate=64
     # Note: TC offset=1.25
+    t_start=time.time()
     while True:
         try:
-            t_start=time.time()
+            t_now=time.time()
             # string=(
             #     f'A0:   {ads.voltage[0]:.3f}V   {ads.temperature(0,offset=1.25):.3f}C   {ads.pressure(0):.3f}barg\n'
             #     f'A1:   {ads.voltage[1]:.3f}V   {ads.temperature(1,offset=1.25):.3f}C   {ads.pressure(1):.3f}barg\n'
@@ -94,12 +96,15 @@ if __name__=='__main__':
             #     f'A3:   {ads.voltage[3]:.3f}V   {ads.temperature(3,offset=1.25):.3f}C   {ads.pressure(3):.3f}barg\n'
             # )
             string=(
-                f'T_K:  {ads.temperature(0):.3f} C\n'
-                f'T_V:  {ads.temperature(1):.3f} C\n'
+                f'TIME: {t_now-t_start:.3f} s\n'
+                f'T_E:  {ads.temperature(0):.3f} C\n'
+                f'T_U:  {ads.temperature(3):.3f} C\n'
+                f'T_G:  {ads.temperature(1):.3f} C\n'
                 f'P_V:  {ads.pressure(2):.3f} barG\n'
+
             )
             print(string)
-            while time.time()-t_start<1:
+            while time.time()-t_now<1:
                 pass
         except KeyboardInterrupt:
             break

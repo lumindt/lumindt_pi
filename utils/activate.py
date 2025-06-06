@@ -1,18 +1,17 @@
 from utils.sensors import ADS1115
 from utils.kiln import Controller as KilnController
-from utils.alicat import Controller as FlowController
 import time
 import csv
 
 kiln=KilnController()
 
-FC=FlowController()
-FC.gas='H2'
-FC.ramp=0
-
 ads=ADS1115()
 
-file='outputs/ZhenAn_B2V1T3_Desorb1.csv'
+pulse_max=30
+pulse=0
+pulse_flow=0
+
+file='outputs/ZhenAn_B2V1T1_Activation.csv'
 with open(file, 'w', newline='') as f:
     writer=csv.writer(f)
     writer.writerow([
@@ -22,38 +21,26 @@ with open(file, 'w', newline='') as f:
         'Kiln Temp (C)',
         'Vessel Temp (C)',
         'Vessel Pressure (barG)',
-        'Flow Pressure (barA)',
-        'Flow Temp (C)',
-        'Flow Volumetric Rate (SLPM)',
-        'Flow Mass Rate (g/s)',
-        'Flow Setpoint (g/s)',
-        'Flow Total Mass (g)',
-        'Flow Errors'
     ])
-    FC.totalizer_reset()
     t_start=time.time()
+    t_ref=t_start
     while True:
         try:
             t_now=time.time()
             v_pres=ads.pressure(2)
             k_temp=ads.temperature(1)
             v_temp=ads.temperature(3)
-            FCdata=FC.poll()
+
+
             kiln.update(k_temp)
+            
             writer.writerow([
                 t_now-t_start,
                 kiln.status,
                 kiln.pause,
                 k_temp,
                 v_temp,
-                v_pres,
-                FCdata['P'],
-                FCdata['T'],
-                FCdata['V'],
-                FCdata['M'],
-                FCdata['S'],
-                FCdata['A'],
-                FCdata['E']
+                v_pres
             ])
             string=(
                 f'{"":-^30}\n'
@@ -63,13 +50,6 @@ with open(file, 'w', newline='') as f:
                 f'Vessel Pres:  {v_pres:0.2f} barG\n'
                 f'Heat On:      {kiln.status}\n'
                 f'Kiln Paused:  {kiln.pause}\n'
-                f'FC Pres:      {FCdata["P"]:0.2f} barA\n'
-                f'FC Temp:      {FCdata["T"]:0.2f} C\n'
-                f'FC V Flow:    {FCdata["V"]:0.2f} SLPM\n'
-                f'FC M Flow:    {FCdata["M"]:0.6f} g/s\n'
-                f'FC Setpoint:  {FCdata["S"]:0.6f} g/s\n'
-                f'FC Total:     {FCdata["A"]:0.6f} grams\n'
-                f'FC Errors:    {FCdata["E"]}\n'
                 )
             print(string)
             while time.time()-t_now<2:
@@ -77,12 +57,10 @@ with open(file, 'w', newline='') as f:
         except KeyboardInterrupt:
             try:
                 cmd_string=(
-                    f'\n0 -> Kiln Off\n'
-                    f'1 -> Kiln On\n'
-                    f'2 -> New Kiln Setpoint Temp\n'
-                    f'3 -> New Kiln Temp Bound\n'
-                    f'4 -> New Alicat Setpoint Flow\n'
-                    f'5 -> Reset Alicat Accumulation\n'
+                    f'\n0 -> Kiln off\n'
+                    f'1 -> Kiln on\n'
+                    f'2 -> New kiln setpoint temp\n'
+                    f'3 -> New kiln temp bound\n'
                     f'Any other number will continue\n'
                     f'Press ENTER to end script\n'
                 )
@@ -92,16 +70,11 @@ with open(file, 'w', newline='') as f:
                 elif cmd==1:
                     kiln.pause = False
                 elif cmd==2:
-                    new=float(input('New Setpoint: '))
+                    new=float(input('New setpoint: '))
                     kiln.setpoint = new
                 elif cmd==3:
-                    new=float(input('New Bound: '))
+                    new=float(input('New bound: '))
                     kiln.bound = new
-                elif cmd==4:
-                    new=float(input('New Setpoint: '))
-                    FC.setpoint = new
-                elif cmd==5:
-                    FC.totalizer_reset()
                 else:
                     continue
             except:
@@ -110,5 +83,4 @@ with open(file, 'w', newline='') as f:
         except Exception as e:
             print(e)
             break
-    FC.setpoint=0
     kiln.stop()
