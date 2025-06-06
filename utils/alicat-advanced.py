@@ -164,7 +164,7 @@ class Controller:
         if formula.isdigit():
             number=int(formula)
         elif formula in self.gas_dict:
-            number=self.gas_dict[formula]
+            number=self.gas_dict[formula]['number']
         else:
             raise ValueError(f'Invalid gas formula: {formula}. Available gases: {list(self.gas_dict.keys())}')
         self._send_command(f'G {number}')
@@ -194,7 +194,7 @@ class Controller:
         if statistic not in ['flow', 'pressure']:
             raise ValueError('Statistic must be one of: flow, pressure.')
         if mode not in ['pos', 'neg', 'net']:
-            raise ValueError('Mode must be one of: flow, pressure, absolute.')
+            raise ValueError('Mode must be one of: pos, negative, net.')
 
         # Map statistic and mode to the command format
         if statistic == 'flow':
@@ -274,13 +274,16 @@ class Controller:
         label_nummarized = self.unit_label_dict[label]
         value_nummarized = self.unit_value_dict[unit_type][value]
         resp = self._send_command(f'DCU {label_nummarized} {value_nummarized}')
-        return {int(resp[1]), resp[2]}
+        return {
+                "unit_numerical_value": int(resp[1]),
+                "unit_label": resp[2]
+            }       
 
     ### TARING ###
     @property
     def tare(self):
         # poll the current status
-        return FC.poll()
+        return self.poll()
     
     @tare.setter
     def tare(self, which):
