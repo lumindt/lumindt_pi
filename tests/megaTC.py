@@ -12,7 +12,7 @@ spi.unlock()
 TC=megaTC(spi_bus=spi)
 i=0
 while True:
-    ret=TC.temp(i)
+    ret=TC.temp(i)[1]
     # print(f'Slot:\t{ret[0]:>2}\t|\tTemp:\t{ret[1]:>6}\t|\tRef:\t{ret[2]:>8}')
     print(ret)
     time.sleep(0.5)
