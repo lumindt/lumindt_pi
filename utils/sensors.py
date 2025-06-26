@@ -3,6 +3,7 @@ import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 import time
+import gpiozero
 
 def map(x,xmin,xmax,ymin,ymax):
     return (x-xmin)*(ymax-ymin)/(xmax-xmin)+ymin
@@ -79,6 +80,55 @@ def rpi_temp():
             return temp_c
     except FileNotFoundError:
         return None
+
+class megaTC:
+
+    def __init__(self,spi_bus,s0=5,s1=6,s2=13):
+        self.spi=spi_bus # busio object
+        while not self.spi.try_lock():
+            pass
+        self.spi.configure(baudrate=100000,phase=0,polarity=0)
+        self.spi.unlock()
+
+        self.S0=gpiozero.OutputDevice(pin=s0)
+        self.S1=gpiozero.OutputDevice(pin=s1)
+        self.S2=gpiozero.OutputDevice(pin=s2)
+
+    def _read(self,num=0):
+        data=bytearray(4)
+        self.S0.value=num & 0b001
+        self.S1.value=(num & 0b010)>>1
+        self.S2.value=(num & 0b100)>>2
+        time.sleep(0.01)
+        while not self.spi.try_lock():
+            pass
+        self.spi.readinto(data)
+        self.spi.unlock()
+        parse={
+            'slot':     num,
+            'temp':     ((data[0]<<8 | data[1])>>2)/4,
+            'fault':    data[1] & 0b1,
+            'ref':      ((data[2]<<8 | data[3])>>4)/16,
+            'SCV':      data[3] & 0b100,
+            'SCG':      data[3] & 0b10,
+            'OC':       data[3] & 0b1,
+        }
+        return parse
+    
+    def temp(self,pos=0):
+        output=self._read(num=pos)
+        ret=[output['slot'],output['temp'],output['ref']]
+        if output['fault']:
+            if output['SCV']: ret.append('f_SCV')
+            if output['SCG']: ret.append('f_SCG')
+            if output['OC']: ret.append('f_OC')
+        return ret
+
+            
+
+
+
+        
 
 if __name__=='__main__':
     
