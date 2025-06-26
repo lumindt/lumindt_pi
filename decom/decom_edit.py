@@ -5,14 +5,21 @@ import board
 import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
-from utils.sensors import ADS1115
+from utils.sensors import ADS1115, megaTC
 from adafruit_mcp4725 import MCP4725
 
 i2c = busio.I2C(board.SCL,board.SDA)
 ad0 = ADS1115(bus=i2c,addr=0x48)
-# ad1 = ADS1115(bus=i2c,addr=0x49)
+ad1 = ADS1115(bus=i2c,addr=0x49)
 ad2 = ADS1115(bus=i2c,addr=0x4B)
 dac = MCP4725(bus=i2c,addr=0x60)
+
+spi=busio.SPI(clock=board.SCLK,MISO=board.MISO)
+while not spi.try_lock():
+    pass
+spi.configure(baudrate=100000,phase=0,polarity=0)
+spi.unlock()
+mtc = megaTC(spi_bus=spi,s0=5,s1=6,s2=13)
 
 svi=gpiozero.OutputDevice(pin=17)
 svo=gpiozero.OutputDevice(pin=27)
@@ -39,6 +46,17 @@ with open(file, 'w', newline='') as f:
         'Vessel Temp 1 (C)',
         'Vessel Temp 2 (C)',
         'Vessel Temp 3 (C)',
+        'Vessel Temp 4 (C)',
+        'Vessel Temp 5 (C)',
+        'Vessel Temp 6 (C)',
+        'Vessel Temp 7 (C)',
+        'Vessel Temp 8 (C)',
+        'Vessel Temp 9 (C)',
+        'Vessel Temp 10 (C)',
+        'Vessel Temp 11 (C)',
+        'Vessel Temp 12 (C)',
+        'Vessel Temp 13 (C)',
+        'Vessel Temp 14 (C)',
         'Vessel Pressure (barG)',
         'Commanded Flow (g/s)',
         'Command Check (g/s)',
@@ -66,6 +84,17 @@ with open(file, 'w', newline='') as f:
             tc1=ad0.temperature(0)
             tc2=ad0.temperature(1)
             tc3=ad0.temperature(3)
+            tc4=ad1.temperature(0)
+            tc5=ad1.temperature(1)
+            tc6=ad1.temperature(3)
+            tc7=mtc.temp(0)[1]
+            tc8=mtc.temp(1)[1]
+            tc9=mtc.temp(2)[1]
+            tc10=mtc.temp(3)[1]
+            tc11=mtc.temp(4)[1]
+            tc12=mtc.temp(5)[1]
+            tc13=mtc.temp(6)[1]
+            tc14=mtc.temp(7)[1]
             pt1=ad0.pressure(2)
             vi=svi.value
             vo=svo.value
