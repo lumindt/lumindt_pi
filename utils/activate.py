@@ -11,7 +11,7 @@ pulse_max=30
 pulse=0
 pulse_flow=0
 
-file='outputs/ZhenAn_B2V1T1_Activation.csv'
+file='outputs/InnerMongolia_B1V2T1_Activation.csv'
 with open(file, 'w', newline='') as f:
     writer=csv.writer(f)
     writer.writerow([

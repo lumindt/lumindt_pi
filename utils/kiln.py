@@ -78,8 +78,8 @@ if __name__=='__main__':
     while True:
         try:
             t_now=time.time()
-            k_temp=ads.temperature(0)
-            v_temp=ads.temperature(1)
+            k_temp=ads.temperature(1)
+            v_temp=ads.temperature(3)
             v_pres=ads.pressure(2)
             kiln.update(k_temp)
             string=(

@@ -20,17 +20,21 @@ class Controller:
         self._send_command('TC 2 1') # Polling relies on knowing only one totalizer is active, dissables totalizer 2
 
         self._send_command('GS 6') # Set default gas to H2 (number 6)
+     
+     
+        self.setpoint=0
         
         self.gas_dict = {
             'H2': { 'number': 6, 'SCCM2G': 8.988e-5, 'SLPM2GPS': 0.08988/60 },
-            'O2': { 'number': 11 },
-            'N2': { 'number': 8 }
+            'O2': { 'number': 11, 'SCCM2G': 1.429e-4, 'SLPM2GPS': 0.1429/60 },
+            'N2': { 'number': 8, 'SCCM2G': 1.250e-4, 'SLPM2GPS': 0.1250/60 },
         }  # TODO add conversion constants for O2 and N2
 
         self.unit_label_dict = {
             "Mass flow": 5,
             "Volumetric flow": 4,
             "Pressure": 2,
+            "Total mass": 9,
             # …etc
         }
         self.unit_value_dict = {
@@ -51,6 +55,7 @@ class Controller:
                 "lb/s":   74,   # Pound per second
                 "lb/h":   75,   # Pound per hour
             },
+
              # ───────────────────────────────────────────────────────────────────────────
             # Volumetric Flow Units (Appendix B-4)
             # ───────────────────────────────────────────────────────────────────────────
@@ -84,7 +89,14 @@ class Controller:
             },
             # etc based on labels
         }
-        
+        self.status_dict = {
+            "TMF": "Totalizer missed mass flow data. Possibly due to high mass flow rate or high volumetric flow rate.",
+            "HLD": "Hold command active. The valve is held in current position. NO ERROR",
+            "EXH": "Exhaust valve is open. NO ERROR",
+            "MOV": "Mass flow rate overage.",
+            "VOV": "Volumetric flow rate overage.",
+            "OVR": "Totalizer has rolled over or is frozen at max value."
+        }
 
 
     def _send_command(self, command):
@@ -99,6 +111,7 @@ class Controller:
     def poll(self):
         '''Poll flow, pressure, and temperature.'''
         data=self._send_command('')
+        # print(data)
         data_dict={
             'U':data[0],
             'P':float(data[1]), # Downstream pressure (barA)
@@ -106,12 +119,15 @@ class Controller:
             'V':float(data[3]), # Volumetric flow (SLPM)
             'M':float(data[4]), # Mass flow (g/s)
             'S':float(data[5]), # Mass flow setpoint (g/s)
-            'A': float(data[6]) * (self.gas_dict.get(data[0], {}).get('SCCM2G', 1) if data[0] in self.gas_dict else 1), # Accumulated mass (g)
+            'A': float(data[6]) * (self.gas_dict.get(self.gas['formula'])['SCCM2G']), # Accumulated mass (g)
             'G':data[7],
             'E':[]
         }
         for code in data[8:]:
             data_dict['E'].append(code)
+            print(self.status_dict.get(code, f'Unknown status code: {code}'))
+    
+        
         return data_dict
 
     ### CONTROL ###
@@ -123,7 +139,7 @@ class Controller:
 
     @setpoint.setter
     def setpoint(self,value):
-        self._send_command(f'LS {value}')
+       self._send_command(f'LS {value}')
 
     @property
     def ramp(self):
@@ -137,19 +153,21 @@ class Controller:
     def hold_closed(self):
         '''Hold the valve closed.'''
         resp = self._send_command('HC')
-        if "OK" not in resp:
+        if "HLD" not in resp:
             raise RuntimeError(f'Failed to hold closed: {resp}')
     
-    def hold_open(self):
-        resp = self._send_command('LS100') # TODO this only works for 100SCCM alicat, need to generalize, also this only works if in flow control mode
-        if "OK" not in resp:
-            raise RuntimeError(f'Failed to hold open: {resp}')
-        self._send_command('HP')
+    # TODO: THIS currently does not work. There is no function to easily fully open. The controller will need to be commanded to the max setpoint, but this needs to be made extendable for different units
+    # def hold_open(self):
+    #     print(self._send_command('S 100')) 
+      
+    #     resp = self._send_command('HP')
+    #     if "HLD" not in resp:
+    #         raise RuntimeError(f'Failed to hold open: {resp}')
     
     def cancel_hold(self):
         '''Cancel the hold closed command.'''
         resp = self._send_command('C')
-        if "OK" not in resp:
+        if "HLD"  in resp:
             raise RuntimeError(f'Failed to cancel hold: {resp}')
 
     ### GAS ### 
@@ -319,6 +337,8 @@ if __name__=='__main__':
     FC=Controller()
     FC.totalizer_reset(1)
     print(FC._send_command('LCG 0'))
+    FC.units = ("Mass flow", "g/s")  # Set default mass flow units to g/s
+
     t_start=time.time()
 
     while True:
@@ -327,6 +347,7 @@ if __name__=='__main__':
             t_now=time.time()
             print(f'{t_now-t_start:.2f}')
             print(FC.poll())
+            
             time.sleep(1)
         except:
             FC.close()

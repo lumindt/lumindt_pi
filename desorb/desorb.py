@@ -1,6 +1,6 @@
 from utils.sensors import ADS1115
 from utils.kiln import Controller as KilnController
-from utils.alicat import Controller as FlowController
+from utils.alicat_advanced import Controller as FlowController
 import time
 import csv
 
@@ -12,7 +12,7 @@ FC.ramp=0
 
 ads=ADS1115()
 
-file='outputs/ZhenAn_B2V1T3_Desorb1.csv'
+file='outputs/will_test_new_alicat_code.csv'
 with open(file, 'w', newline='') as f:
     writer=csv.writer(f)
     writer.writerow([
@@ -30,7 +30,8 @@ with open(file, 'w', newline='') as f:
         'Flow Total Mass (g)',
         'Flow Errors'
     ])
-    FC.totalizer_reset()
+    FC.totalizer_reset(1)
+    FC.cancel_hold()
     t_start=time.time()
     while True:
         try:
