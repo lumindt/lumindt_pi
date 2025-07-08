@@ -11,7 +11,7 @@ pulse_max=30
 pulse=0
 pulse_flow=0
 
-file='outputs/PROOF_IM.csv'
+file='outputs/hedgehog_tester.csv'
 with open(file, 'w', newline='') as f:
     writer=csv.writer(f)
     writer.writerow([
@@ -19,7 +19,13 @@ with open(file, 'w', newline='') as f:
         'Kiln Status',
         'Kiln Paused',
         'Kiln Temp (C)',
-        'Vessel Temp (C)',
+        'Surface Temp (C)',
+        'T_R0_X0 (C)',
+        'T_R0_X1 (C)',
+        'T_R0.5_X1 (C)',
+        'T_R1_X1 (C)',
+        'T_R1.5_X1 (C)',
+        'T_R0_X2 (C)',
         'Vessel Pressure (barG)',
     ])
     t_start=time.time()
@@ -29,7 +35,13 @@ with open(file, 'w', newline='') as f:
             t_now=time.time()
             v_pres=ads.pressure(2)
             k_temp=ads.temperature(1)
-            v_temp=ads.temperature(3)
+            surf_temp=ads.temperature(3)
+            T_R0_X0 = ads.temperature()
+            T_R0_X1 = ads.temperature()
+            T_R05_X1 = ads.temperature()
+            T_R1_X1 = ads.temperature()
+            T_R15_X1 = ads.temperature()
+            T_R0_X2 = ads.temperature()
 
 
             kiln.update(k_temp)
@@ -39,14 +51,20 @@ with open(file, 'w', newline='') as f:
                 kiln.status,
                 kiln.pause,
                 k_temp,
-                v_temp,
+                surf_temp,
+                T_R0_X0,
+                T_R0_X1,
+                T_R05_X1,
+                T_R1_X1,
+                T_R15_X1,
+                T_R0_X2,
                 v_pres
             ])
             string=(
                 f'{"":-^30}\n'
                 f'Time:         {t_now-t_start:0.2f}\n'
                 f'Kiln Temp:    {k_temp:0.2f} C (CONTROL VARIABLE)\n'
-                f'Vessel Temp:  {v_temp:0.2f} C\n'
+                f'Surface Temp:  {surf_temp:0.2f} C\n'
                 f'Vessel Pres:  {v_pres:0.2f} barG\n'
                 f'Heat On:      {kiln.status}\n'
                 f'Kiln Paused:  {kiln.pause}\n'
