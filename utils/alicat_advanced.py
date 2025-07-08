@@ -21,21 +21,23 @@ class Controller:
 
         self._send_command('GS 6') # Set default gas to H2 (number 6)
      
-     
+        total_mass_unit = self.units['Total mass']['unit_numerical_value']  # Get the unit numerical value for total mass
+        if total_mass_unit != 9:  # Check if the unit is not already set to grams
+            raise ValueError(f'Invalid total mass unit: {total_mass_unit}. Expected 9 (grams). Conversion factor needs to be adjusted accordingly.')
+
         self.setpoint=0
         
         self.gas_dict = {
             'H2': { 'number': 6, 'SCCM2G': 8.988e-5, 'SLPM2GPS': 0.08988/60 },
             'O2': { 'number': 11, 'SCCM2G': 1.429e-4, 'SLPM2GPS': 0.1429/60 },
             'N2': { 'number': 8, 'SCCM2G': 1.250e-4, 'SLPM2GPS': 0.1250/60 },
-        }  # TODO add conversion constants for O2 and N2
+        }  
 
         self.unit_label_dict = {
             "Mass flow": 5,
             "Volumetric flow": 4,
             "Pressure": 2,
             "Total mass": 9,
-            # …etc
         }
         self.unit_value_dict = {
              # ───────────────────────────────────────────────────────────────────────────
