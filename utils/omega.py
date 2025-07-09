@@ -5,6 +5,7 @@ import adafruit_mcp4725 as DAC
 from adafruit_ads1x15.analog_in import AnalogIn
 import time
 
+
 class ADS1115:
     def __init__(self,addr):
         bus=busio.I2C(board.SCL,board.SDA)
@@ -54,7 +55,7 @@ class OmegaFC:
         voltage = self.ads.signal[2]
         # 0-5V corresponds to 0-10 L/min, so scale linearly
         flow_rate = (voltage / 5.0) * 10.0
-        return flow_rate
+        return voltage
 
     @flow.setter
     def set_flow(self, flow_rate, ramp_rate=None):
@@ -85,11 +86,11 @@ if __name__=='__main__':
     
     FM = OmegaFM(addr=0x4B)
     # FC = OmegaFC(addrADC=0x4B, addrDAC=0x60)
+    t_start = time.time()
     while True:
         try:
-            t_start=time.time()
-        
             string = (
+                f'{time.time()-t_start:.3f} \n'
                 f'FM1:  {FM.flow(0):.3f} \n'
                 f'FM2:  {FM.flow(1):.3f} \n'
                 # f'FC1:  {FC.flow():.3f} \n'
