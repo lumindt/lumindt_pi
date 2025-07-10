@@ -21,9 +21,9 @@ class Controller:
         self._send_command('GS 6') # Set default gas to H2 (number 6)
         
         self.gas_dict = {
-            'H2': { 'number': 6, 'SCCM2G': 8.988e-5, 'SLPM2GPS': 0.08988/60 },
-            'O2': { 'number': 11, 'SCCM2G': 1.429e-4, 'SLPM2GPS': 0.1429/60 },
-            'N2': { 'number': 8, 'SCCM2G': 1.250e-4, 'SLPM2GPS': 0.1250/60 },
+            'H2': { 'number': 6, 'SCCM2G': 8.988e-5},
+            'O2': { 'number': 11, 'SCCM2G': 1.429e-4},
+            'N2': { 'number': 8, 'SCCM2G': 1.250e-4},
         }  
 
         self.unit_label_dict = {
@@ -44,11 +44,6 @@ class Controller:
                 "g/h":    68,   # Gram per hour
                 "kg/m":   69,   # Kilogram per minute
                 "kg/h":   70,   # Kilogram per hour
-                "oz/s":   71,   # Ounce per second
-                "oz/m":   72,   # Ounce per minute
-                "oz/h":   73,   # Ounce per hour
-                "lb/s":   74,   # Pound per second
-                "lb/h":   75,   # Pound per hour
             },
 
              # ───────────────────────────────────────────────────────────────────────────
@@ -62,8 +57,6 @@ class Controller:
                 "L/min":   6,   # Standard liter per minute
                 "L/s":     7,   # Standard liter per second
                 "L/h":     8,   # Standard liter per hour
-                "US GPM":  9,   # Standard US gallon per minute
-                "GPM":    10,   # Standard gallon per minute (imperial)
             },
 
             # ───────────────────────────────────────────────────────────────────────────
@@ -78,11 +71,7 @@ class Controller:
                 "g/cm²":   7,   # Gram-force per square centimeter
                 "kg/cm²":  8,   # Kilogram-force per square centimeter
                 "PSI":    10,   # Pound-force per square inch
-                "PSF":    11,   # Pound-force per square foot
-                "mTorr":  12,   # Millitorr
-                "torr":   13,   # Torr
             },
-            # etc based on labels
         }
         self.status_dict = {
             "TMF": "Totalizer missed mass flow data. Possibly due to high mass flow rate or high volumetric flow rate.",
@@ -93,11 +82,14 @@ class Controller:
             "OVR": "Totalizer has rolled over or is frozen at max value."
         }
 
-        self.conversion_done = True
         self.totalizer_reset(1)
+
         total_mass_unit = self.units['Total mass']['unit_numerical_value']  # Get the unit numerical value for total mass
-        if total_mass_unit != 9 and (self.conversion_done == False):  # Check if the unit is not already set to grams
-            raise ValueError(f'Invalid total mass unit: {total_mass_unit}. Expected 9 (grams). Conversion factor needs to be adjusted accordingly.')
+        # Check if the total_mass_unit value appears in any of the items in the tuple
+        # Check if the total_mass_unit matches the conversion factor's unit value
+        conversion_tuple = self.total_mass_conversion
+        if total_mass_unit != 6 and (conversion_tuple is not None and total_mass_unit != conversion_tuple[1]):
+            raise ValueError(f'Atypical total mass unit: {total_mass_unit}. Conversion factor based on 6 (SCCM). Conversion factor needs to be adjusted accordingly. Do this using the total_mass_conversion property. If you have adjusted it, ensure that the name of {total_mass_unit} appears in the conversion factor name.')
 
 
 
@@ -107,9 +99,6 @@ class Controller:
         time.sleep(0.1)
         resp=self.ser.read_until(b'\r').decode('utf-8').strip().split()
         return resp
-
-    def set_conversion(self):
-        self.conversion_done = True
 
     ### POLLING ###
 
@@ -124,7 +113,7 @@ class Controller:
             'V':float(data[3]), # Volumetric flow (SLPM)
             'M':float(data[4]), # Mass flow (g/s)
             'S':float(data[5]), # Mass flow setpoint (g/s)
-            'A': float(data[6]) * (self.gas_dict.get(self.gas['formula'])['SCCM2G']), # Accumulated mass (g)
+            'A': float(data[6]) * list(self.gas_dict.get(self.gas['formula']).values())[1], # Accumulated mass (g)
             'G':data[7],
             'E':[]
         }
@@ -301,7 +290,29 @@ class Controller:
         return {
                 "unit_numerical_value": int(resp[1]),
                 "unit_label": resp[2]
-            }       
+            } 
+
+    @property
+    def total_mass_conversion(self):
+        """
+        Get the current total mass conversion factor for the gas formula.
+
+        Returns:
+            The conversion factor for the current gas formula.
+        """
+        current_gas = self.gas['formula']
+        items = list(self.gas_dict[current_gas].items())
+        if len(items) < 2:
+            return None
+        return items[1]  # (key, value) tuple
+
+    def set_total_mass_conversion(self, conversion_name, factor):
+        current_gas = self.gas['formula']
+        self.gas_dict[current_gas] = {k: v for k, v in self.gas_dict[current_gas].items() if k == 'number'}
+        self.gas_dict[current_gas][conversion_name] = factor  # Update the conversion factor for H2
+       
+
+      
 
     ### TARING ###
     @property

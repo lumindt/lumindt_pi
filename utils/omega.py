@@ -4,6 +4,7 @@ import adafruit_ads1x15.ads1115 as ADS
 import adafruit_mcp4725 as DAC
 from adafruit_ads1x15.analog_in import AnalogIn
 import time
+from utils.relay import RelayBoard, RelayControl
 
 
 class ADS1115:
@@ -43,7 +44,7 @@ class OmegaFM:
         voltage = self.ads.signal[pinout]
         # 0-5V corresponds to 0-10 L/min, so scale linearly
         flow_rate = (voltage / 5.0) * 10.0
-        return flow_rate
+        return voltage
     
 class OmegaFC:
     def __init__(self, addrADC, addrDAC):
@@ -87,6 +88,11 @@ if __name__=='__main__':
     FM = OmegaFM(addr=0x4B)
     # FC = OmegaFC(addrADC=0x4B, addrDAC=0x60)
     t_start = time.time()
+    relay_board = RelayBoard()
+    svi = RelayControl(relay_board=relay_board,relay='R4')
+    svo = RelayControl(relay_board=relay_board,relay='R3')
+    svi.on()
+    svo.on()
     while True:
         try:
             string = (

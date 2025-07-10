@@ -1,6 +1,6 @@
 from utils.sensors import ADS1115
 from utils.kiln import Controller as KilnController
-from utils.alicat import Controller as FlowController
+from _deprecated._utils.alicat import Controller as FlowController
 import time
 import csv
 
