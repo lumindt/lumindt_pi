@@ -27,10 +27,11 @@ pulse_flow=0
 FC=FlowController()
 FC.gas='H2'
 FC.ramp=0
+FC.set_conversion()
 
 ads=ADS1115()
 
-file='outputs/Molina_B2V1T2_Hot_Desorb_2.csv'
+file='outputs/Molina_B2V1T3_2.csv'
 with open(file, 'w', newline='') as f:
     writer=csv.writer(f)
     writer.writerow([
@@ -138,7 +139,7 @@ with open(file, 'w', newline='') as f:
                     new=float(input('New Setpoint: '))
                     FC.setpoint = new
                 elif cmd==5:
-                    FC.totalizer_reset()
+                    FC.totalizer_reset(1)
                 else:
                     continue
             except:

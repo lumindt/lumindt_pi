@@ -18,14 +18,7 @@ class Controller:
         
         self._send_command('TC 1 -1 0 -1 7 0') # Sets up Totalizer 1
         self._send_command('TC 2 1') # Polling relies on knowing only one totalizer is active, dissables totalizer 2
-
         self._send_command('GS 6') # Set default gas to H2 (number 6)
-     
-        total_mass_unit = self.units['Total mass']['unit_numerical_value']  # Get the unit numerical value for total mass
-        if total_mass_unit != 9:  # Check if the unit is not already set to grams
-            raise ValueError(f'Invalid total mass unit: {total_mass_unit}. Expected 9 (grams). Conversion factor needs to be adjusted accordingly.')
-
-        self.setpoint=0
         
         self.gas_dict = {
             'H2': { 'number': 6, 'SCCM2G': 8.988e-5, 'SLPM2GPS': 0.08988/60 },
@@ -100,6 +93,13 @@ class Controller:
             "OVR": "Totalizer has rolled over or is frozen at max value."
         }
 
+        self.conversion_done = True
+        self.totalizer_reset(1)
+        total_mass_unit = self.units['Total mass']['unit_numerical_value']  # Get the unit numerical value for total mass
+        if total_mass_unit != 9 and (self.conversion_done == False):  # Check if the unit is not already set to grams
+            raise ValueError(f'Invalid total mass unit: {total_mass_unit}. Expected 9 (grams). Conversion factor needs to be adjusted accordingly.')
+
+
 
     def _send_command(self, command):
         full_command = f'{self.address}{command}\r'.encode('utf-8')
@@ -107,6 +107,9 @@ class Controller:
         time.sleep(0.1)
         resp=self.ser.read_until(b'\r').decode('utf-8').strip().split()
         return resp
+
+    def set_conversion(self):
+        self.conversion_done = True
 
     ### POLLING ###
 
@@ -141,7 +144,7 @@ class Controller:
 
     @setpoint.setter
     def setpoint(self,value):
-       self._send_command(f'LS {value}')
+        self._send_command(f'LS {value}')
 
     @property
     def ramp(self):
@@ -195,7 +198,7 @@ class Controller:
         '''Reset totalizer either num 1 or 2'''
         if num not in [1, 2]:
             raise ValueError('Totalizer number must be 1 or 2.')
-        self._send_command(f'T {num}')
+        print(self._send_command(f'T {num}'))
 
     def totalizer_config(self, num, statistic, mode):
         """
@@ -244,6 +247,7 @@ class Controller:
             A dictionary mapping each label to its current unit value and label.
         """
         units = {}
+
         for label, label_nummarized in self.unit_label_dict.items():
             resp = self._send_command(f'DCU {label_nummarized}')
              # add unit_numerical_value and unit_label to the dictionary
@@ -337,9 +341,10 @@ class Controller:
 if __name__=='__main__':
 
     FC=Controller()
-    FC.totalizer_reset(1)
     print(FC._send_command('LCG 0'))
     FC.units = ("Mass flow", "g/s")  # Set default mass flow units to g/s
+
+    print(FC._send_command('FPF 5 66'))
 
     t_start=time.time()
 
@@ -348,8 +353,10 @@ if __name__=='__main__':
             print('--------------------')
             t_now=time.time()
             print(f'{t_now-t_start:.2f}')
-            print(FC.poll())
+            print(FC.poll())            
             
+            FC.setpoint = 0.0001480
+
             time.sleep(1)
         except:
             FC.close()
