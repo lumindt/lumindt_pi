@@ -1,9 +1,8 @@
 import serial
 import time
-import inspect
 
 class Controller:
-    def __init__(self, port='/dev/ttyUSB0', baudrate=19200, address='A', timeout=0.5, mass_flow_units='g/s', volumetric_flow_units='L/min', pressure_units='bar', temperature_units='C', mass_setpoint_units='g/s'):
+    def __init__(self, port='/dev/ttyUSB0', baudrate=19200, address='A', timeout=0.5, **units):
         self.address = address.upper()
         try:
             self.ser = serial.Serial(
@@ -28,8 +27,6 @@ class Controller:
             'N2': { 'number': 8, 'SCCM2G': 1.250e-4},
         }
 
-       
-
         self.unit_label_dict = {
             "Mass flow": 5,
             "Volumetric flow": 4,
@@ -39,10 +36,7 @@ class Controller:
             "Temperature": 3, 
         }
         self.unit_value_dict = {
-             # ───────────────────────────────────────────────────────────────────────────
-            # True Mass Flow Units (Appendix B-2)
-            # ───────────────────────────────────────────────────────────────────────────
-            "mass_flow_units": {
+            "Mass flow": {
                 "mg/s":   64,   # Milligram per second
                 "mg/m":   65,   # Milligram per minute
                 "g/s":    66,   # Gram per second
@@ -51,11 +45,7 @@ class Controller:
                 "kg/m":   69,   # Kilogram per minute
                 "kg/h":   70,   # Kilogram per hour
             },
-
-             # ───────────────────────────────────────────────────────────────────────────
-            # Volumetric Flow Units (Appendix B-4)
-            # ───────────────────────────────────────────────────────────────────────────
-            "volumetric_flow_units": {
+            "Volumetric flow": {
                 "µL/min":  2,   # Standard microliter per minute
                 "mL/min":  3,   # Standard milliliter per minute
                 "mL/s":    4,   # Standard milliliter per second
@@ -64,11 +54,7 @@ class Controller:
                 "L/s":     7,   # Standard liter per second
                 "L/h":     8,   # Standard liter per hour
             },
-
-            # ───────────────────────────────────────────────────────────────────────────
-            # Pressure Units (Appendix B-6)
-            # ───────────────────────────────────────────────────────────────────────────
-            "pressure_units": {
+            "Pressure": {
                 "Pa":      2,   # Pascal
                 "kPa":     4,   # Kilopascal
                 "MPa":     5,   # Megapascal
@@ -78,18 +64,12 @@ class Controller:
                 "kg/cm²":  9,   # Kilogram-force per square centimeter
                 "PSI":    10,   # Pound-force per square inch
             },
-            # ───────────────────────────────────────────────────────────────────────────
-            # Temperature Units (Appendix B-7)
-            # ───────────────────────────────────────────────────────────────────────────
-            "temperature_units":{
+            "Temperature":{
                 "C": 2,    # Degree Celsius
                 "F": 3,    # Degree Fahrenheit
                 "K": 4,     # Kelvin
             },
-            # ───────────────────────────────────────────────────────────────────────────
-            # Mass Flow Setpoint Units (same as mass_flow_units)
-            # ───────────────────────────────────────────────────────────────────────────
-            "mass_flow_setpoint_units": {
+            "Mass flow setpoint": {
                 "mg/s":   64,   # Milligram per second
                 "mg/m":   65,   # Milligram per minute
                 "g/s":    66,   # Gram per second
@@ -99,6 +79,7 @@ class Controller:
                 "kg/h":   70,   # Kilogram per hour
             }
         }
+
         self.status_dict = {
             "TMF": "Totalizer missed mass flow data. Possibly due to high mass flow rate or high volumetric flow rate.",
             "HLD": "Hold command active. The valve is held in current position. NO ERROR",
@@ -108,70 +89,65 @@ class Controller:
             "OVR": "Totalizer has rolled over or is frozen at max value."
         }
 
-        def set_units(self, label, value):
-            # Only allow set_units to be called during __init__
-            stack = inspect.stack()
-            if not any(frame.function == '__init__' for frame in stack):
-                raise RuntimeError("set_units can only be called during __init__")
-        
-            if label not in self.unit_label_dict:
-                raise ValueError(f'Invalid unit label: {label}. Available labels: {list(self.unit_label_dict.keys())}')
-                
-            # Find the correct unit_type key in unit_value_dict by matching label with '_units' suffix
-            label_key = label.lower().replace(" ", "_") + "_units"
-            unit_type = None
-            if label_key in self.unit_value_dict:
-                unit_type = label_key
-            else:
-                for k in self.unit_value_dict:
-                    if label.lower().replace(" ", "_") in k and k.endswith("_units"):
-                        unit_type = k
-                        break
-            if not unit_type:
-                raise ValueError(f'No unit type found for label: {label}')
-            
-            if value not in self.unit_value_dict[unit_type]:
-                raise ValueError(f'Invalid unit value: {value}. Available values: {list(self.unit_value_dict[unit_type].keys())}')
-            
-            label_nummarized = self.unit_label_dict[label]
-            value_nummarized = self.unit_value_dict[unit_type][value]
-            resp = self._send_command(f'DCU {label_nummarized} {value_nummarized}')
-            self.chosen_units = self.units  # Update the chosen units after setting
-            return {
-                "unit_numerical_value": int(resp[1]),
-                "unit_label": resp[2]
-            } 
-
-
         self.totalizer_reset(1)
         
+        UNIT_DEFAULTS = {
+            "mass_flow":          "g/s",
+            "volumetric_flow":    "L/min",
+            "pressure":           "bar",
+            "temperature":        "C",
+            "mass_setpoint":      "g/s",
+        }
+
+        requested_units = UNIT_DEFAULTS.copy()
+        requested_units |= units
+
         # set units based on paramaters of init
-        set_units(self, "Mass flow", mass_flow_units)  # Set default mass flow units
-        set_units(self, "Volumetric flow", volumetric_flow_units)  # Set
-        set_units(self, "Pressure", pressure_units)  # Set default pressure units
-        set_units(self, "Temperature", temperature_units)  # Set default temperature units
-        set_units(self, "Mass flow setpoint", mass_setpoint_units)  # Set default mass flow setpoint units
-        
+        self._set_units("Mass flow", requested_units["mass_flow"])  # Set default mass flow units
+        self._set_units("Volumetric flow", requested_units["volumetric_flow"])  # Set default volumetric flow units
+        self._set_units("Pressure", requested_units["pressure"])  # Set default pressure units
+        self._set_units("Temperature", requested_units["temperature"])  # Set default temperature units
+        self._set_units("Mass flow setpoint", requested_units["mass_setpoint"])  # Set default mass flow setpoint units
 
         self.chosen_units = self.units
-        if 'Temperature' in self.chosen_units and self.chosen_units['Temperature']['unit_label'] == '`C':
-            self.chosen_units['Temperature']['unit_label'] = 'C'
+
+        CLEAN = str.maketrans('', '', '`') 
+        self.chosen_units['Temperature']['unit_label'] = self.chosen_units['Temperature']['unit_label'].translate(CLEAN)  # Remove backticks from temperature unit label
 
         total_mass_unit = self.units['Total mass']['unit_numerical_value']  # Get the unit numerical value for total mass
-        # Check if the total_mass_unit value appears in any of the items in the tuple
-        # Check if the total_mass_unit matches the conversion factor's unit value
-        conversion_tuple = self.total_mass_conversion
-        if total_mass_unit != 6 and (conversion_tuple is not None and total_mass_unit != conversion_tuple[1]):
-            raise ValueError(f'Atypical total mass unit: {total_mass_unit}. Conversion factor based on 6 (SCCM). Conversion factor needs to be adjusted accordingly. Do this using the total_mass_conversion property. If you have adjusted it, ensure that the name of {total_mass_unit} appears in the conversion factor name.')
+        self._validate_total_mass_unit(total_mass_unit)
 
+        self.mass_flow_totals = []
 
-
+    ### UTILITIES ###
     def _send_command(self, command):
         full_command = f'{self.address}{command}\r'.encode('utf-8')
         self.ser.write(full_command)
         time.sleep(0.1)
         resp=self.ser.read_until(b'\r').decode('utf-8').strip().split()
         return resp
+
+
+    def _validate_total_mass_unit(self, total_mass_unit):
+        if total_mass_unit != 6:
+            raise ValueError(
+                f"Total mass unit {total_mass_unit} requires a conversion "
+                f"factor, note that the default is set for SCCM."
+            )
+
+    def _set_units(self, label, value):
+        unit_type = label
+        if value not in self.unit_value_dict[unit_type]:
+            raise ValueError(f'Invalid unit value: {value}. Available values: {list(self.unit_value_dict[unit_type].keys())}')
+        
+        label_nummarized = self.unit_label_dict[label]
+        value_nummarized = self.unit_value_dict[unit_type][value]
+        resp = self._send_command(f'DCU {label_nummarized} {value_nummarized}')
+        return {
+            "unit_numerical_value": int(resp[1]),
+            "unit_label": resp[2]
+        } 
+
 
     ### POLLING ###
 
@@ -187,19 +163,24 @@ class Controller:
             'V': (float(data[3]), units['Volumetric flow']['unit_label']),  # Volumetric flow
             'M': (float(data[4]), units['Mass flow']['unit_label']),  # Mass flow
             'S': (float(data[5]), units['Mass flow setpoint']['unit_label']),  # Mass flow setpoint
-            'A': (float(data[6]) * list(self.gas_dict.get(self.gas['formula']).values())[1], 'g'),  # Accumulated mass (g)
+            'A': ((float(data[6]) * list(self.gas_dict.get(self.gas['formula']).values())[1]) + (self.mass_flow_totals[-1] if self.mass_flow_totals else 0), 'g'),  # Accumulated mass (g)
             'G': data[7],
             'E': []
         }
         for code in data[8:]:
             data_dict['E'].append(code)
-            print(self.status_dict.get(code, f'Unknown status code: {code}'))
-    
+            if code == "TMF":
+                try:
+                    self.mass_flow_totals.append(data_dict['A'][0])
+                    self.totalizer_reset(1, manual_reset=False)  # Reset totalizer if mass flow data is missed
+                except Exception as e:
+                    print(f"Error resetting totalizer: {e}")
+            elif code in self.status_dict:
+                print(self.status_dict.get(code, f'Unknown status code: {code}'))
         
         return data_dict
 
     ### CONTROL ###
-
     @property
     def setpoint(self):
         resp=self._send_command('LS')
@@ -209,6 +190,7 @@ class Controller:
     def setpoint(self,value):
         self._send_command(f'LS {value}')
 
+    ### RAMP RATE ###
     @property
     def ramp(self):
         resp=self._send_command('SR')
@@ -257,10 +239,12 @@ class Controller:
 
     ### TOTALIZER ###
 
-    def totalizer_reset(self,num):
+    def totalizer_reset(self,num, manual_reset=True):
         '''Reset totalizer either num 1 or 2'''
         if num not in [1, 2]:
             raise ValueError('Totalizer number must be 1 or 2.')
+        if manual_reset:
+            self.mass_flow_totals = []
         print(self._send_command(f'T {num}'))
 
     def totalizer_config(self, num, statistic, mode):
@@ -323,8 +307,8 @@ class Controller:
                 'unit_label': unit_label
             }
         return units
-        
 
+    
     @property
     def total_mass_conversion(self):
         """
@@ -343,9 +327,6 @@ class Controller:
         current_gas = self.gas['formula']
         self.gas_dict[current_gas] = {k: v for k, v in self.gas_dict[current_gas].items() if k == 'number'}
         self.gas_dict[current_gas][conversion_name] = factor  # Update the conversion factor for H2
-       
-
-      
 
     ### TARING ###
     @property
@@ -375,7 +356,6 @@ class Controller:
         self._send_command(cmd)
 
     ### CLOSE ###
-
     def close(self):
         '''Close the serial connection.'''
         if self.ser.is_open:

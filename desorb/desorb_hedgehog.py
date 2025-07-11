@@ -1,6 +1,6 @@
 from utils.sensors import ADS1115, megaTC
 from utils.kiln import Controller as KilnController
-from utils.alicat_advanced import Controller as FlowController
+from utils.alicat import Controller as FlowController
 import busio
 import board
 import time
