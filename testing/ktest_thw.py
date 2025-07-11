@@ -9,9 +9,9 @@ from openpyxl import Workbook, load_workbook
 import os
 
 # === CONFIGURATION ===
-V_SUPPLY = 3.3        # Supplied voltage to bridge (V)
-R_FIXED = 33      # Fixed resistor (Ohms)
-LOG_INTERVAL = 0.001  # Time between samples (seconds)
+V_SUPPLY = 2        # Supplied voltage to bridge (V)
+R_FIXED = 10      # Fixed resistor (Ohms)
+LOG_INTERVAL = 0.1  # Time between samples (seconds)
 EXCEL_FILE = "resistance_data.xlsx"
 
 # === GLOBAL STOP FLAG ===
@@ -57,11 +57,14 @@ listener_thread.start()
 print(f"\nStarted logging to sheet '{sheet_name}' — type 'stop' and press ENTER to end.\n")
 
 try:
-    while not stop_flag:
+    while not stop_flag:          
         v_out = channel.voltage
         try:
             x = (R_FIXED / (R_FIXED + R_FIXED)) - (v_out / V_SUPPLY)
             r_var = (R_FIXED * x) / (1 - x)
+            
+            #r_var = R_FIXED - 2*v_out/V_SUPPLY
+
 
         except ZeroDivisionError:
             r_var = float('inf')

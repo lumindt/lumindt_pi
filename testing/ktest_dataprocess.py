@@ -10,7 +10,7 @@ EXCEL_INPUT = "resistance_data.xlsx"
 EXCEL_OUTPUT = "ktest_dataprocess.xlsx"
 ALPHA = 0.00385            # Temperature coefficient of resistance (1/K)
 V_SUPPLY = 3.3             # Voltage applied (V)
-L = 0.05                   # Length of wire (m)
+L = 0.035                  # Length of wire (m)
 q_prime = 0.25              # Heat flux (W/m²)
 
 # === LOAD INPUT EXCEL FILE ===
@@ -39,7 +39,7 @@ plt.close()
 
 
 # === GET R0 FROM USER AND CALCULATE del R ===
-R0 = float(input("Enter R0 value (Ω) to subtract from R: "))
+R0 = 0
 data['del R'] = data['R_var (Ohms)'] - R0
 
 # === COMPUTE del T ===
@@ -50,11 +50,11 @@ data['del T'] = delT
 
 
 # === PLOT delT vs logtime ===
-log_time = np.log(data['time_s'])
-plt.plot(log_time, data['del T'])
+#log_time = np.log(data['time_s'])
+plt.plot(data['time_s'], data['del T'])
 plt.xlabel('ln Time (s)')
 plt.ylabel('Temperature Rise ΔT (K)')
-plt.title(f'ΔT vs ln Time — {run_name}')
+plt.title(f'ΔT vs Time — {run_name}')
 plt.grid(True)
 plt.savefig(f"{run_name}_deltaT_vs_time.png")
 plt.close()
@@ -68,11 +68,11 @@ log_t = np.log(fit_data['time_s'])
 delT_fit = fit_data['del T']
 
 # === LINEAR FIT ===
-slope, intercept, r_value, p_value, std_err = linregress(log_t, delT_fit)
+slope, intercept, r_value, p_value, std_err =    linregress(log_t, delT_fit)
 print(f"Slope m = {slope:.5f} K")
 
 # === CALCULATE k ===
-k = q_prime / (4 * slope)
+k = q_prime / (4 * pi*slope)
 print(f"Calculated thermal conductivity k = {k:.4f} W/m·K")
 
 # === SAVE TO OUTPUT EXCEL FILE ===
