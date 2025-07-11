@@ -3,11 +3,9 @@ import threading
 import time
 import csv
 import board as board
-import os
-import sys
 from utils.sensors import ADS1115
-from utils.omega import OmegaFM 
-from cycler.FSM import FSM
+from utils.omega import FMA1820A
+from utils.FSM import FSM
 
 if __name__ == '__main__':
 
@@ -22,8 +20,7 @@ if __name__ == '__main__':
 
     ads0 = ADS1115(addr=0x48)
     ads1 = ADS1115(addr=0x49)
-
-    FM = OmegaFM(addr=0x4B)
+    FM = FMA1820A(addr=0x4B)
 
     def _accumulator():
         global acc_in, acc_out
@@ -32,19 +29,14 @@ if __name__ == '__main__':
             time.sleep(0.0001)
             f_i=FM.flow(0) * SLPM2GPS
             f_o=FM.flow(1) * SLPM2GPS
+            acc_in+=f_i*(time.time()-t_start)
+            acc_out+=f_o*(time.time()-t_start)   
 
-            # BECAUSE THE FLOW SENSOR HAS ACCURACY OF 1%
-            if f_i > 0.3:
-                acc_in+=f_i*(time.time()-t_start)
-            if f_o > 0.3:
-                acc_out+=f_o*(time.time()-t_start)   
+
 
     _flow_thread=threading.Thread(target=_accumulator,daemon=True)
     _thread_lock=threading.Lock()
     _flow_thread.start()
-
-
-
   
     with open(file, 'w', newline='') as f:
         writer=csv.writer(f)

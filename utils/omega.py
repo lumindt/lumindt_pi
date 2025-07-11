@@ -14,7 +14,7 @@ class MCP4725:
         value = int((voltage / 5.0) * 65535)
         self.dac.value = value    
 
-class Omega:
+class OmegaFM:
     def __init__(self, addr, max_flow, unit='L/min'):
         self.ads = ADS1115(addr)
         self.max_flow = max_flow
@@ -27,7 +27,7 @@ class Omega:
     
 class OmegaFC:
     def __init__(self, addr, max_flow, unit):
-        self.FC = Omega(addr, max_flow=max_flow, unit=unit)
+        self.FC = OmegaFM(addr, max_flow=max_flow, unit=unit)
         self.dac = MCP4725(0x60)  # DAC address for flow control
         self.max_flow = max_flow  # unit
         self.unit = unit
@@ -56,7 +56,7 @@ class OmegaFC:
             self.dac.set_voltage(voltage)
             print(f'Ramped flow to {flow_rate:.2f} {self.unit} which is {voltage:.3f} V')
 
-class FMA1820A(Omega):
+class FMA1820A(OmegaFM):
     def __init__(self, addr):
         super().__init__(addr, max_flow=10, unit='L/min')
         self.model = 'FMA1820A (METER | 0-10L/min)'
