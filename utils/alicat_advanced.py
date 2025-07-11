@@ -1,8 +1,9 @@
 import serial
 import time
+import inspect
 
 class Controller:
-    def __init__(self, port='/dev/ttyUSB0', baudrate=19200, address='A', timeout=0.5):
+    def __init__(self, port='/dev/ttyUSB0', baudrate=19200, address='A', timeout=0.5, mass_flow_units='g/s', volumetric_flow_units='L/min', pressure_units='bar', temperature_units='C', mass_setpoint_units='g/s'):
         self.address = address.upper()
         try:
             self.ser = serial.Serial(
@@ -19,18 +20,23 @@ class Controller:
         self._send_command('TC 1 -1 0 -1 7 0') # Sets up Totalizer 1
         self._send_command('TC 2 1') # Polling relies on knowing only one totalizer is active, dissables totalizer 2
         self._send_command('GS 6') # Set default gas to H2 (number 6)
+        self.cancel_hold()  # Ensure no hold command is active
         
         self.gas_dict = {
             'H2': { 'number': 6, 'SCCM2G': 8.988e-5},
             'O2': { 'number': 11, 'SCCM2G': 1.429e-4},
             'N2': { 'number': 8, 'SCCM2G': 1.250e-4},
-        }  
+        }
+
+       
 
         self.unit_label_dict = {
             "Mass flow": 5,
             "Volumetric flow": 4,
             "Pressure": 2,
             "Total mass": 9,
+            "Mass flow setpoint": 37,
+            "Temperature": 3, 
         }
         self.unit_value_dict = {
              # ───────────────────────────────────────────────────────────────────────────
@@ -64,14 +70,34 @@ class Controller:
             # ───────────────────────────────────────────────────────────────────────────
             "pressure_units": {
                 "Pa":      2,   # Pascal
-                "kPa":     3,   # Kilopascal
-                "MPa":     4,   # Megapascal
-                "mbar":    5,   # Millibar
-                "bar":     6,   # Bar
-                "g/cm²":   7,   # Gram-force per square centimeter
-                "kg/cm²":  8,   # Kilogram-force per square centimeter
+                "kPa":     4,   # Kilopascal
+                "MPa":     5,   # Megapascal
+                "mbar":    6,   # Millibar
+                "bar":     7,   # Bar
+                "g/cm²":  8,   # Gram-force per square centimeter
+                "kg/cm²":  9,   # Kilogram-force per square centimeter
                 "PSI":    10,   # Pound-force per square inch
             },
+            # ───────────────────────────────────────────────────────────────────────────
+            # Temperature Units (Appendix B-7)
+            # ───────────────────────────────────────────────────────────────────────────
+            "temperature_units":{
+                "C": 2,    # Degree Celsius
+                "F": 3,    # Degree Fahrenheit
+                "K": 4,     # Kelvin
+            },
+            # ───────────────────────────────────────────────────────────────────────────
+            # Mass Flow Setpoint Units (same as mass_flow_units)
+            # ───────────────────────────────────────────────────────────────────────────
+            "mass_flow_setpoint_units": {
+                "mg/s":   64,   # Milligram per second
+                "mg/m":   65,   # Milligram per minute
+                "g/s":    66,   # Gram per second
+                "g/m":    67,   # Gram per minute
+                "g/h":    68,   # Gram per hour
+                "kg/m":   69,   # Kilogram per minute
+                "kg/h":   70,   # Kilogram per hour
+            }
         }
         self.status_dict = {
             "TMF": "Totalizer missed mass flow data. Possibly due to high mass flow rate or high volumetric flow rate.",
@@ -82,7 +108,54 @@ class Controller:
             "OVR": "Totalizer has rolled over or is frozen at max value."
         }
 
+        def set_units(self, label, value):
+            # Only allow set_units to be called during __init__
+            stack = inspect.stack()
+            if not any(frame.function == '__init__' for frame in stack):
+                raise RuntimeError("set_units can only be called during __init__")
+        
+            if label not in self.unit_label_dict:
+                raise ValueError(f'Invalid unit label: {label}. Available labels: {list(self.unit_label_dict.keys())}')
+                
+            # Find the correct unit_type key in unit_value_dict by matching label with '_units' suffix
+            label_key = label.lower().replace(" ", "_") + "_units"
+            unit_type = None
+            if label_key in self.unit_value_dict:
+                unit_type = label_key
+            else:
+                for k in self.unit_value_dict:
+                    if label.lower().replace(" ", "_") in k and k.endswith("_units"):
+                        unit_type = k
+                        break
+            if not unit_type:
+                raise ValueError(f'No unit type found for label: {label}')
+            
+            if value not in self.unit_value_dict[unit_type]:
+                raise ValueError(f'Invalid unit value: {value}. Available values: {list(self.unit_value_dict[unit_type].keys())}')
+            
+            label_nummarized = self.unit_label_dict[label]
+            value_nummarized = self.unit_value_dict[unit_type][value]
+            resp = self._send_command(f'DCU {label_nummarized} {value_nummarized}')
+            self.chosen_units = self.units  # Update the chosen units after setting
+            return {
+                "unit_numerical_value": int(resp[1]),
+                "unit_label": resp[2]
+            } 
+
+
         self.totalizer_reset(1)
+        
+        # set units based on paramaters of init
+        set_units(self, "Mass flow", mass_flow_units)  # Set default mass flow units
+        set_units(self, "Volumetric flow", volumetric_flow_units)  # Set
+        set_units(self, "Pressure", pressure_units)  # Set default pressure units
+        set_units(self, "Temperature", temperature_units)  # Set default temperature units
+        set_units(self, "Mass flow setpoint", mass_setpoint_units)  # Set default mass flow setpoint units
+        
+
+        self.chosen_units = self.units
+        if 'Temperature' in self.chosen_units and self.chosen_units['Temperature']['unit_label'] == '`C':
+            self.chosen_units['Temperature']['unit_label'] = 'C'
 
         total_mass_unit = self.units['Total mass']['unit_numerical_value']  # Get the unit numerical value for total mass
         # Check if the total_mass_unit value appears in any of the items in the tuple
@@ -105,17 +178,18 @@ class Controller:
     def poll(self):
         '''Poll flow, pressure, and temperature.'''
         data=self._send_command('')
-        # print(data)
-        data_dict={
-            'U':data[0],
-            'P':float(data[1]), # Downstream pressure (barA)
-            'T':float(data[2]), # Gas temperature (C)
-            'V':float(data[3]), # Volumetric flow (SLPM)
-            'M':float(data[4]), # Mass flow (g/s)
-            'S':float(data[5]), # Mass flow setpoint (g/s)
-            'A': float(data[6]) * list(self.gas_dict.get(self.gas['formula']).values())[1], # Accumulated mass (g)
-            'G':data[7],
-            'E':[]
+        units=self.chosen_units
+        
+        data_dict = {
+            'U': data[0],
+            'P': (float(data[1]), units['Pressure']['unit_label']),  # Downstream pressure
+            'T': (float(data[2]), units['Temperature']['unit_label']),  # Gas temperature
+            'V': (float(data[3]), units['Volumetric flow']['unit_label']),  # Volumetric flow
+            'M': (float(data[4]), units['Mass flow']['unit_label']),  # Mass flow
+            'S': (float(data[5]), units['Mass flow setpoint']['unit_label']),  # Mass flow setpoint
+            'A': (float(data[6]) * list(self.gas_dict.get(self.gas['formula']).values())[1], 'g'),  # Accumulated mass (g)
+            'G': data[7],
+            'E': []
         }
         for code in data[8:]:
             data_dict['E'].append(code)
@@ -150,7 +224,7 @@ class Controller:
         if "HLD" not in resp:
             raise RuntimeError(f'Failed to hold closed: {resp}')
     
-    # TODO: THIS currently does not work. There is no function to easily fully open. The controller will need to be commanded to the max setpoint, but this needs to be made extendable for different units
+   # TODO: THIS currently does not work. There is no function to easily fully open. The controller will need to be commanded to the max setpoint, but this needs to be made extendable for different units
     # def hold_open(self):
     #     print(self._send_command('S 100')) 
       
@@ -251,47 +325,6 @@ class Controller:
         return units
         
 
-    @units.setter
-    def units(self, args):
-        """
-        Set the engineering unit for a given label.
-
-        Args:
-            args (tuple): (label, value) where label is the unit label (e.g. "Mass flow")
-                          and value is the unit string (e.g. "g/s")
-
-        Returns:
-            unit_numerical_value and unit_label as a dictionary.
-        """
-        label, value = args
-
-        if label not in self.unit_label_dict:
-            raise ValueError(f'Invalid unit label: {label}. Available labels: {list(self.unit_label_dict.keys())}')
-                
-        # Find the correct unit_type key in unit_value_dict by matching label with '_units' suffix
-        label_key = label.lower().replace(" ", "_") + "_units"
-        unit_type = None
-        if label_key in self.unit_value_dict:
-            unit_type = label_key
-        else:
-            for k in self.unit_value_dict:
-                if label.lower().replace(" ", "_") in k and k.endswith("_units"):
-                    unit_type = k
-                    break
-        if not unit_type:
-            raise ValueError(f'No unit type found for label: {label}')
-        
-        if value not in self.unit_value_dict[unit_type]:
-            raise ValueError(f'Invalid unit value: {value}. Available values: {list(self.unit_value_dict[unit_type].keys())}')
-        
-        label_nummarized = self.unit_label_dict[label]
-        value_nummarized = self.unit_value_dict[unit_type][value]
-        resp = self._send_command(f'DCU {label_nummarized} {value_nummarized}')
-        return {
-                "unit_numerical_value": int(resp[1]),
-                "unit_label": resp[2]
-            } 
-
     @property
     def total_mass_conversion(self):
         """
@@ -353,8 +386,6 @@ if __name__=='__main__':
 
     FC=Controller()
     print(FC._send_command('LCG 0'))
-    FC.units = ("Mass flow", "g/s")  # Set default mass flow units to g/s
-
     print(FC._send_command('FPF 5 66'))
 
     t_start=time.time()
@@ -364,7 +395,16 @@ if __name__=='__main__':
             print('--------------------')
             t_now=time.time()
             print(f'{t_now-t_start:.2f}')
-            print(FC.poll())            
+            data = FC.poll()    
+
+            print(f'Pressure: {data["P"][0]:.2f} {data["P"][1]}')
+            print(f'Temperature: {data["T"][0]:.2f} {data["T"][1]}')
+            print(f'Volumetric Flow: {data["V"][0]:.2f} {data["V"][1]}')
+            print(f'Mass Flow: {data["M"][0]:.2f} {data["M"][1]}')
+            print(f'Setpoint: {data["S"][0]:.2f} {data["S"][1]}')
+            print(f'Accumulated Mass: {data["A"][0]:.2f} {data["A"][1]}')
+            print(f'Gas: {data["G"]}')
+
             
             FC.setpoint = 0.0001480
 
