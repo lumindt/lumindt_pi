@@ -1,6 +1,6 @@
 from utils.sensors import ADS1115
 from utils.kiln import Controller as KilnController
-from utils.alicat_advanced import Controller as FlowController
+from utils.alicat import Controller as FlowController
 import time
 import csv
 
@@ -21,17 +21,33 @@ with open(file, 'w', newline='') as f:
         'Kiln Paused',
         'Kiln Temp (C)',
         'Vessel Temp (C)',
-        'Vessel Pressure (barG)',
-        'Flow Pressure (barA)',
-        'Flow Temp (C)',
-        'Flow Volumetric Rate (SLPM)',
-        'Flow Mass Rate (g/s)',
-        'Flow Setpoint (g/s)',
-        'Flow Total Mass (g)',
+        'Vessel Pressure',
+        'Flow Pressure',
+        'Flow Temp',
+        'Flow Volumetric Rate',
+        'Flow Mass Rate',
+        'Flow Setpoint',
+        'Flow Total Mass',
         'Flow Errors'
     ])
+    FCdata=FC.poll()
+    # write row of units:
+    writer.writerow([
+        's',
+        'bool',
+        'bool',
+        'C',
+        'C',
+        'barG',
+        FCdata['P'][1],  # Pressure unit
+        FCdata['T'][1],  # Temperature unit
+        FCdata['V'][1],  # Volumetric flow unit
+        FCdata['M'][1],  # Mass flow unit
+        FCdata['S'][1],  # Mass flow setpoint unit
+        FCdata['A'][1],  # Accumulated mass unit
+        'error codes'
+    ])
     FC.totalizer_reset(1)
-    FC.cancel_hold()
     t_start=time.time()
     while True:
         try:
@@ -48,13 +64,13 @@ with open(file, 'w', newline='') as f:
                 k_temp,
                 v_temp,
                 v_pres,
-                FCdata['P'],
-                FCdata['T'],
-                FCdata['V'],
-                FCdata['M'],
-                FCdata['S'],
-                FCdata['A'],
-                FCdata['E']
+                FCdata['P'][0],
+                FCdata['T'][0],
+                FCdata['V'][0],
+                FCdata['M'][0],
+                FCdata['S'][0],
+                FCdata['A'][0],
+                FCdata['E'],
             ])
             string=(
                 f'{"":-^30}\n'
@@ -64,12 +80,12 @@ with open(file, 'w', newline='') as f:
                 f'Vessel Pres:  {v_pres:0.2f} barG\n'
                 f'Heat On:      {kiln.status}\n'
                 f'Kiln Paused:  {kiln.pause}\n'
-                f'FC Pres:      {FCdata["P"]:0.2f} barA\n'
-                f'FC Temp:      {FCdata["T"]:0.2f} C\n'
-                f'FC V Flow:    {FCdata["V"]:0.2f} SLPM\n'
-                f'FC M Flow:    {FCdata["M"]:0.6f} g/s\n'
-                f'FC Setpoint:  {FCdata["S"]:0.6f} g/s\n'
-                f'FC Total:     {FCdata["A"]:0.6f} grams\n'
+                f'FC Pres:      {FCdata["P"]:0.2f} {FCdata["P"][1]}\n'
+                f'FC Temp:      {FCdata["T"]:0.2f} {FCdata["T"][1]}\n'
+                f'FC V Flow:    {FCdata["V"]:0.2f} {FCdata["V"][1]}\n'
+                f'FC M Flow:    {FCdata["M"]:0.6f} {FCdata["M"][1]}\n'
+                f'FC Setpoint:  {FCdata["S"]:0.6f} {FCdata["S"][1]}\n'
+                f'FC Total:     {FCdata["A"]:0.6f} {FCdata["A"][1]}\n'
                 f'FC Errors:    {FCdata["E"]}\n'
                 )
             print(string)

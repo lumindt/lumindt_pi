@@ -54,8 +54,11 @@ class ADS1115:
             3:self.a3.voltage
         }
 
-    def pressure(self,pin=0,res=165,max_bar=68.95):
+    def pressure(self,pin=2,res=165,max_bar=68.95):
         v=self.voltage
+        if pin not in [2]:
+            print(f'PIN {pin} IS A TC')
+            return None
         try:
             volt=v[pin]
         except:
@@ -65,6 +68,8 @@ class ADS1115:
 
     def temperature(self,pin=0,offset=0):
         v=self.voltage
+        if pin not in [0,1,3]:
+            print('PIN 2 IS A PT')
         try:
             volt=v[pin]
         except:

@@ -44,13 +44,13 @@ class FSM:
     def flow_in(self):
         time.sleep(0.2)
         self.svo.off()
-        time.sleep(2)
+        time.sleep(1)
         self.svi.on()
 
     def flow_out(self):
         time.sleep(0.2)
         self.svi.off()
-        time.sleep(2)
+        time.sleep(1)
         self.svo.on()
 
     def flow_none(self):
