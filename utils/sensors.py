@@ -129,11 +129,6 @@ class megaTC:
             if output['OC']: ret.append('f_OC')
         return ret
 
-            
-
-
-
-        
 
 if __name__=='__main__':
     

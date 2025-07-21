@@ -23,36 +23,59 @@ extraTC=megaTC(spi_bus=spi)
 FC=FlowController()
 FC.gas='H2'
 FC.ramp=0
-FC.set_conversion()
 
 ads=ADS1115()
 
-file='outputs/test.csv'
+file='outputs/qgen_test3.csv'
 with open(file, 'w', newline='') as f:
     writer=csv.writer(f)
     writer.writerow([
-        'Time (s)',
+        'Time',
         'Kiln Status',
         'Kiln Paused',
-        'Kiln Temp (C)',
-        'Surface Temp (C)',
-        'T_R0_X0 (C)',
-        'T_R0_X1 (C)',
-        'T_R0.5_X1 (C)',
-        'T_R1_X1 (C)',
-        'T_R1.5_X1 (C)',
-        'T_R0_X2 (C)',
-        'Vessel Pressure (barG)',
-        'Flow Pressure (barA)',
-        'Flow Temp (C)',
-        'Flow Volumetric Rate (SLPM)',
-        'Flow Mass Rate (g/s)',
-        'Flow Setpoint (g/s)',
-        'Flow Total Mass (g)',
+        'Kiln Temp',
+        'Surface Temp',
+        'T_Z0_R0',
+        'T_Z1_R0',
+        'T_Z2_R0',
+        'T_Z1_R1',
+        'T_Z1_R2',
+        'T_Z1_R3',
+        'Vessel Pressure',
+        'Flow Pressure',
+        'Flow Temp',
+        'Flow Volumetric Rate',
+        'Flow Mass Rate',
+        'Flow Setpoint',
+        'Flow Total Mass',
         'Flow Errors'
+    ])
+    FCdata=FC.poll()
+    # write row of units:
+    writer.writerow([
+        's',
+        'bool',
+        'bool',
+        'C',
+        'C',
+        'C',
+        'C',
+        'C',
+        'C',
+        'C',
+        'C',
+        'barG',
+        FCdata['P'][1],  # Pressure unit
+        FCdata['T'][1],  # Temperature unit
+        FCdata['V'][1],  # Volumetric flow unit
+        FCdata['M'][1],  # Mass flow unit
+        FCdata['S'][1],  # Mass flow setpoint unit
+        FCdata['A'][1],  # Accumulated mass unit
+        'error codes'
     ])
     FC.totalizer_reset(1)
     FC.cancel_hold()
+    print(FC.units)
     t_start=time.time()
 
     M_stop=0
@@ -70,7 +93,7 @@ with open(file, 'w', newline='') as f:
             T_R15_X1 = extraTC.temp(0)[1]
             T_R0_X2 = ads1.temperature(3)
             FCdata=FC.poll()
-            if FCdata['E'] >= M_stop:
+            if FCdata['A'][0] >= M_stop:
                 FC.setpoint = 0
                 kiln.pause = True
             kiln.update(k_temp)
@@ -87,14 +110,15 @@ with open(file, 'w', newline='') as f:
                 T_R15_X1,
                 T_R0_X2,
                 v_pres,
-                FCdata['P'],
-                FCdata['T'],
-                FCdata['V'],
-                FCdata['M'],
-                FCdata['S'],
-                FCdata['A'],
+                FCdata['P'][0],
+                FCdata['T'][0],
+                FCdata['V'][0],
+                FCdata['M'][0],
+                FCdata['S'][0],
+                FCdata['A'][0],
                 FCdata['E']
             ])
+            print('1')
             string=(
                 f'{"":-^30}\n'
                 f'Time:         {t_now-t_start:0.2f}\n'
@@ -103,12 +127,12 @@ with open(file, 'w', newline='') as f:
                 f'Vessel Pres:  {v_pres:0.2f} barG\n'
                 f'Heat On:      {kiln.status}\n'
                 f'Kiln Paused:  {kiln.pause}\n'
-                f'FC Pres:      {FCdata["P"]:0.2f} barA\n'
-                f'FC Temp:      {FCdata["T"]:0.2f} C\n'
-                f'FC V Flow:    {FCdata["V"]:0.2f} SLPM\n'
-                f'FC M Flow:    {FCdata["M"]:0.6f} g/s\n'
-                f'FC Setpoint:  {FCdata["S"]:0.6f} g/s\n'
-                f'FC Total:     {FCdata["A"]:0.6f} grams\n'
+                f'FC Pres:      {FCdata["P"][0]:0.2f} barA\n'
+                f'FC Temp:      {FCdata["T"][0]:0.2f} C\n'
+                f'FC V Flow:    {FCdata["V"][0]:0.2f} SLPM\n'
+                f'FC M Flow:    {FCdata["M"][0]:0.6f} g/s\n'
+                f'FC Setpoint:  {FCdata["S"][0]:0.6f} g/s\n'
+                f'FC Total:     {FCdata["A"][0]:0.6f} grams\n'
                 f'FC Errors:    {FCdata["E"]}\n'
                 )
             print(string)
@@ -117,16 +141,30 @@ with open(file, 'w', newline='') as f:
         except KeyboardInterrupt:
             try:
                 cmd_string=(
-                    f'\n0 -> Pause Test (for emergencies)\n'
-                    f'1 -> New Cycle\n'
+                    f'\n0 -> Kiln Off\n'
+                    f'1 -> Kiln On\n'
+                    f'2 -> Kiln Tune\n'
+                    f'3 -> New Cycle\n'
                     f'Any other number will continue\n'
                     f'Press ENTER to end script\n'
                 )
                 cmd=float(input(cmd_string))
                 if cmd==0:
                     kiln.pause = True
-                    FC.setpoint = 0
                 elif cmd==1:
+                    kiln.pause = False
+                elif cmd==2:
+                    temp_string=(
+                        '\nEnter the kiln setpoint temperature (C): \n'
+                        '(Typical: 100 C)\n'
+                    )
+                    kiln.setpoint=float(input(temp_string))
+                    bound_string=(
+                        '\nEnter the kiln temperature bound (C): \n'
+                        '(Typical: 5 C)\n'
+                    )
+                    kiln.bound=float(input(bound_string))
+                elif cmd==3:
                     stop_string=(
                         '\nEnter the mass (g) to stop at: \n'
                         '(Refer to test plan)\n'
@@ -137,11 +175,8 @@ with open(file, 'w', newline='') as f:
                         '(Typical: 0.00167 g/s)\n'
                     )
                     FC.setpoint=float(input(flow_string))
-                    kiln_string=(
-                        '\nKiln On?\n'
-                        '(0 -> Off | 1 -> On)\n'
-                    )
-                    kiln.pause = not bool(input(kiln_string))
+                    time.sleep(0.2)
+                    print(FC.setpoint)
                 else:
                     continue
             except:

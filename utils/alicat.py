@@ -122,8 +122,9 @@ class Controller:
     ### UTILITIES ###
     def _send_command(self, command):
         full_command = f'{self.address}{command}\r'.encode('utf-8')
+        time.sleep(0.1) # Wait for the device to be ready
         self.ser.write(full_command)
-        time.sleep(0.1)
+        time.sleep(0.1) # Wait for the device to respond
         resp=self.ser.read_until(b'\r').decode('utf-8').strip().split()
         return resp
 
