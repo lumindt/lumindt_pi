@@ -7,12 +7,13 @@ import board
 import busio
 from openpyxl import Workbook, load_workbook
 import os
+import math
 
 # === CONFIGURATION ===
 V_SUPPLY = 2        # Supplied voltage to bridge (V)
 R_FIXED = 10      # Fixed resistor (Ohms)
-LOG_INTERVAL = 0.1  # Time between samples (seconds)
-EXCEL_FILE = "resistance_data.xlsx"
+LOG_INTERVAL = 0.01  # Time between samples (seconds)
+EXCEL_FILE = "resistance_data2.xlsx"
 
 # === GLOBAL STOP FLAG ===
 stop_flag = False
@@ -47,7 +48,7 @@ else:
 
 sheet_name = f"Run_{next_run}"
 ws = wb.create_sheet(title=sheet_name)
-ws.append(["Timestamp", "Voltage (V)", "R_var (Ohms)"])
+ws.append(["Elapsed ms", "time_sec","Voltage (V)", "R_var"])
 
 # === START INPUT LISTENER THREAD ===
 listener_thread = Thread(target=input_listener, daemon=True)
@@ -55,24 +56,25 @@ listener_thread.start()
 
 # === DATA LOGGING LOOP ===
 print(f"\nStarted logging to sheet '{sheet_name}' — type 'stop' and press ENTER to end.\n")
-
+# === CAPTURE START TIME ===
+start_time = time.time()
 try:
     while not stop_flag:          
         v_out = channel.voltage
         try:
-            x = (R_FIXED / (R_FIXED + R_FIXED)) - (v_out / V_SUPPLY)
+            x = (R_FIXED / (R_FIXED + R_FIXED)) + (v_out / V_SUPPLY)
             r_var = (R_FIXED * x) / (1 - x)
             
-            #r_var = R_FIXED - 2*v_out/V_SUPPLY
-
-
         except ZeroDivisionError:
             r_var = float('inf')
 
-        timestamp = datetime.now().isoformat(timespec='seconds')
-        print(f"[{timestamp}] Voltage: {v_out:.4f} V | R_var: {r_var:.2f} Ω")
+        elapsed_ms = (time.time() - start_time) * 1000  # ms since start
+        time_sec = elapsed_ms / 1000
+        
 
-        ws.append([timestamp, round(v_out, 4), round(r_var, 2)])
+        print(f"[{elapsed_ms:.0f} ms] |time_s:{time_sec if time_sec is not None else 'N/A'} | Voltage: {v_out:.4f} V | R_var: {r_var:.6f} Ω")
+
+        ws.append([round(elapsed_ms, 2), time_sec, round(v_out, 4), round(r_var, 6)])
         time.sleep(LOG_INTERVAL)
 
 finally:

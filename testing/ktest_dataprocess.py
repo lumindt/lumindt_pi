@@ -1,89 +1,113 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import linregress
-from openpyxl import Workbook, load_workbook
 import os
 
-# === CONFIGURATION ===
-EXCEL_INPUT = "resistance_data.xlsx"
-EXCEL_OUTPUT = "ktest_dataprocess.xlsx"
-ALPHA = 0.00385            # Temperature coefficient of resistance (1/K)
-V_SUPPLY = 3.3             # Voltage applied (V)
-L = 0.035                  # Length of wire (m)
-q_prime = 0.25              # Heat flux (W/m²)
+from openpyxl import load_workbook
 
-# === LOAD INPUT EXCEL FILE ===
-df = pd.read_excel(EXCEL_INPUT, sheet_name=None)
-print("Available runs:", list(df.keys()))
+# === Constants ===
+ALPHA = 0.00385
+LENGTH = 0.06  # Length of the wire in meters
 
-run_name = input("Enter run sheet name (e.g., Run_1): ").strip()
-if run_name not in df:
-    raise ValueError(f"Sheet '{run_name}' not found in {EXCEL_INPUT}")
+# === Paths ===
+input_file = 'resistance_data.xlsx'
+output_dir = 'plots'
+processed_file = 'processed_data.xlsx'
 
-data = df[run_name]
+os.makedirs(output_dir, exist_ok=True)
 
-# === CONVERT TIMESTAMP TO SECONDS ===
-data['Timestamp'] = pd.to_datetime(data['Timestamp'])
-data['time_s'] = (data['Timestamp'] - data['Timestamp'].iloc[0]).dt.total_seconds()
+# === Load workbook ===
+xls = pd.ExcelFile(input_file)
 
-# === PLOT R vs TIME ===
-plt.plot(data['time_s'], data['R_var (Ohms)'])
-plt.xlabel('Time (s)')
-plt.ylabel('Resistance (Ω)')
-plt.title(f'R vs Time — {run_name}')
-plt.grid(True)
-print("Saving plot...")
-plt.savefig(f"{run_name}_deltaT_vs_ln_time.png")
-plt.close()
+# === Store processed sheets ===
+processed_sheets = {}
 
+for sheet_name in xls.sheet_names:
+    print(f'Processing sheet: {sheet_name}')
+    df = pd.read_excel(xls, sheet_name=sheet_name)
+    df.columns = df.columns.str.strip()  # Remove any accidental spaces
 
-# === GET R0 FROM USER AND CALCULATE del R ===
-R0 = 0
-data['del R'] = data['R_var (Ohms)'] - R0
+    print(df.columns)
 
-# === COMPUTE del T ===
-delR = data['del R'].to_numpy()
-r0 = R0
-delT = (delR / r0) / ALPHA
-data['del T'] = delT
+    # --- Get smallest positive R_var ---
+    R0 = df[df['R_var'] > 0]['R_var'].min()
 
+    # --- Remove rows with negative R_var ---
+    df = df[df['R_var'] > 0].copy()
 
-# === PLOT delT vs logtime ===
-#log_time = np.log(data['time_s'])
-plt.plot(data['time_s'], data['del T'])
-plt.xlabel('ln Time (s)')
-plt.ylabel('Temperature Rise ΔT (K)')
-plt.title(f'ΔT vs Time — {run_name}')
-plt.grid(True)
-plt.savefig(f"{run_name}_deltaT_vs_time.png")
-plt.close()
+    # --- Calculate averages ---
+    R_var_avg = df['R_var'].mean()
+    V_out_avg = df['Voltage (V)'].mean()
 
-# === GET TIME RANGE FROM USER ===
-tmin = float(input("Enter minimum time (s) for linear fit: "))
-tmax = float(input("Enter maximum time (s) for linear fit: "))
+    # --- Calculate other constants ---
+    Rtot = 2 * 10 * (10 + R_var_avg) / (3 * 10 + R_var_avg)
+    i1 = 0.5 * ((3.3 / Rtot) - (V_out_avg / 10))
+    P = i1 ** 2 * R_var_avg
+    q_dot = P / LENGTH  # Watts per meter
 
-fit_data = data[(data['time_s'] >= tmin) & (data['time_s'] <= tmax)]
-log_t = np.log(fit_data['time_s'])
-delT_fit = fit_data['del T']
+    # --- Add delT column ---
+    df['delT'] = (1 / ALPHA) * (df['R_var'] / R0 - 1)
 
-# === LINEAR FIT ===
-slope, intercept, r_value, p_value, std_err =    linregress(log_t, delT_fit)
-print(f"Slope m = {slope:.5f} K")
+    # --- Remove outliers ---
+    df = df[df['delT'] < df['delT'].quantile(0.99)]
 
-# === CALCULATE k ===
-k = q_prime / (4 * pi*slope)
-print(f"Calculated thermal conductivity k = {k:.4f} W/m·K")
+    # --- Fit best line ---
+    x = df['time_sec']
+    y = df['delT']
+    log_x = np.log(x)
+    m, b = np.polyfit(log_x, y, 1)
 
-# === SAVE TO OUTPUT EXCEL FILE ===
-if os.path.exists(EXCEL_OUTPUT):
-    wb = load_workbook(EXCEL_OUTPUT)
-    ws = wb.active
-else:
-    wb = Workbook()
-    ws = wb.active
-    ws.append(["Run", "k (W/m·K)"])
+    # --- Calculate k ---
+    k = q_dot / (4 * np.pi * m)
 
-ws.append([run_name, round(k, 5)])
-wb.save(EXCEL_OUTPUT)
-print(f"Saved k to {EXCEL_OUTPUT} under run '{run_name}'")
+    print(f'Calculated slope m: {m:.4f}')
+    print(f'Calculated k: {k:.4f} W/(m·K)')
+
+    # --- Scatter plot ---
+    plt.figure(figsize=(8, 6))
+    plt.scatter(x, y, label='Data', s=20)
+    plt.xscale('log')
+
+    x_sorted = np.sort(x)
+    y_fit = m * np.log(x_sorted) + b
+    plt.plot(x_sorted, y_fit, color='red', label=f'Best Fit: y = {m:.4f} * log(x) + {b:.4f}')
+
+    plt.xlabel('Time (sec, log scale)')
+    plt.ylabel('delT')
+    plt.title(f'delT vs Time for {sheet_name}')
+    plt.legend()
+    plt.tight_layout()
+
+    plot_filename = os.path.join(output_dir, f'{sheet_name}_plot.png')
+    plt.savefig(plot_filename)
+    plt.close()
+    print(f'Plot saved to: {plot_filename}')
+
+    # --- Save constants + processed data to new DataFrame ---
+    # Build constants as single-row DataFrame
+    consts = pd.DataFrame({
+        'Constant': [
+            'alpha', 'R0', 'R_var_avg', 'V_out_avg',
+            'Rtot', 'i1', 'P', 'q_dot', 'm', 'k'
+        ],
+        'Value': [
+            ALPHA, R0, R_var_avg, V_out_avg,
+            Rtot, i1, P, q_dot, m, k
+        ]
+    })
+
+    # Add an empty row as spacer
+    spacer = pd.DataFrame([['', '']], columns=['Constant', 'Value'])
+
+    # Combine: constants, spacer, then processed data
+    df_reset = df.reset_index(drop=True)
+    combined = pd.concat([consts, spacer, df_reset], ignore_index=True)
+
+    processed_sheets[sheet_name] = combined
+
+# === Write all sheets to one Excel ===
+with pd.ExcelWriter(processed_file) as writer:
+    for name, processed_df in processed_sheets.items():
+        processed_df.to_excel(writer, sheet_name=name, index=False)
+
+print(f'\nProcessed data written to: {processed_file}')
