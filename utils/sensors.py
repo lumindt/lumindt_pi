@@ -54,8 +54,11 @@ class ADS1115:
             3:self.a3.voltage
         }
 
-    def pressure(self,pin=0,res=165,max_bar=68.95):
+    def pressure(self,pin=2,res=165,max_bar=68.95):
         v=self.voltage
+        if pin not in [2]:
+            print(f'PIN {pin} IS A TC')
+            return None
         try:
             volt=v[pin]
         except:
@@ -65,6 +68,8 @@ class ADS1115:
 
     def temperature(self,pin=0,offset=0):
         v=self.voltage
+        if pin not in [0,1,3]:
+            print('PIN 2 IS A PT')
         try:
             volt=v[pin]
         except:
@@ -124,15 +129,11 @@ class megaTC:
             if output['OC']: ret.append('f_OC')
         return ret
 
-            
-
-
-
-        
 
 if __name__=='__main__':
     
-    ads=ADS1115(addr=0x48)
+    ads0=ADS1115(addr=0x48)
+    ads1=ADS1115(addr=0x49)
     # ads.ads.data_rate=64
     # Note: TC offset=1.25
     t_start=time.time()
@@ -147,12 +148,16 @@ if __name__=='__main__':
             # )
             string=(
                 f'TIME: {t_now-t_start:.3f} s\n'
-                f'T_E:  {ads.temperature(0):.3f} C\n'
-                f'T_U:  {ads.temperature(3):.3f} C\n'
-                f'T_G:  {ads.temperature(1):.3f} C\n'
-                f'P_V:  {ads.pressure(2):.3f} barG\n'
-
+                f'T_1 (ads0):  {ads0.temperature(0):.3f} C\n'
+                f'T_3 (ads0):  {ads0.temperature(3):.3f} C\n'
+                f'T_2 (ads0):  {ads0.temperature(1):.3f} C\n'
+                f'P_V (ads0):  {ads0.pressure(2):.3f} barG\n'
+                f'T_4 (ads1):  {ads1.temperature(0):.3f} C\n'
+                f'T_6 (ads1):  {ads1.temperature(3):.3f} C\n'
+                f'T_5 (ads1):  {ads1.temperature(1):.3f} C\n'
+                f'P_V (ads1):  {ads1.pressure(2):.3f} barG\n'
             )
+
             print(string)
             while time.time()-t_now<1:
                 pass
