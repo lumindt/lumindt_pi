@@ -1,0 +1,213 @@
+VERSION ""
+
+
+NS_ : 
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	CAT_DEF_
+	CAT_
+	FILTER
+	BA_DEF_DEF_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_TABLE_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_REL_
+	BA_DEF_DEF_REL_
+	BU_SG_REL_
+	BU_EV_REL_
+	BU_BO_REL_
+	SG_MUL_VAL_
+
+BS_:
+
+BU_: VCU FCU
+
+
+BO_ 2566848977 VCU_1: 8 VCU
+ SG_ VCU1_FCSMaxOutVolt : 0|14@1+ (0.1,0) [0|1638.3] "V"  FCU
+ SG_ VCU1_Reserved1 : 14|14@1+ (1,0) [0|16383] ""  FCU
+ SG_ VCU1_ReqPower : 28|13@1+ (0.1,0) [0|819.1] "kW"  FCU
+ SG_ VCU1_OnVoltageActive : 41|2@1+ (1,0) [0|3] ""  FCU
+ SG_ VCU1_StartFCS : 43|2@1+ (1,0) [0|3] ""  FCU
+ SG_ VCU1_HighVoltStatus : 45|2@1+ (1,0) [0|3] ""  FCU
+ SG_ VCU1_EmrgncyShtdwnFCS : 47|2@1+ (1,0) [0|3] ""  FCU
+ SG_ VCU1_VehicleSpeed : 49|12@1+ (0.1,0) [0|409.5] "km/h"  FCU
+ SG_ VCU1_FCSHeatAllowed : 61|2@1+ (1,0) [0|3] ""  FCU
+
+BO_ 2566848978 FCU_01: 8 FCU
+ SG_ FCU1_Phase : 0|3@1+ (1,0) [0|7] ""  VCU
+ SG_ FCU1_DCDCStatus : 3|1@1+ (1,0) [0|1] ""  VCU
+ SG_ FCU1_WaterLevelLow : 4|1@1+ (1,0) [0|1] ""  VCU
+ SG_ FCU1_ConductivityHigh : 5|1@1+ (1,0) [0|1] ""  VCU
+ SG_ FCU1_FaultLevel : 6|2@1+ (1,0) [0|3] ""  VCU
+ SG_ FCU1_FaultCode : 8|16@1+ (1,0) [0|65535] ""  VCU
+ SG_ FCU1_AllowedPower : 24|13@1+ (0.1,0) [0|819.1] "kW"  VCU
+ SG_ FCU1_SystemOutputPower : 37|13@1+ (0.1,0) [0|819.1] "kW"  VCU
+ SG_ FCU1_SystemOutputCurrent : 50|14@1+ (0.1,0) [0|1638.3] "A"  VCU
+
+BO_ 2566849233 VCU_2: 8 VCU
+ SG_ VCU2_LiSOC : 0|8@1+ (1,0) [0|255] "%"  FCU
+ SG_ VCU2_MaxChargeCurrent : 8|16@1+ (0.1,0) [0|6553.5] "A"  FCU
+ SG_ VCU2_P_InsulationRes : 24|16@1+ (1,0) [0|65535] "k��"  FCU
+ SG_ VCU2_N_InsulationRes : 40|16@1+ (1,0) [0|65535] "k��"  FCU
+ SG_ VCU2_AmbientTemperature : 56|8@1+ (1,-40) [-40|215] "��"  FCU
+
+BO_ 2566849234 FCU_02: 8 FCU
+ SG_ FCU2_Reseved1 : 0|1@1+ (1,0) [0|1] ""  VCU
+ SG_ FCU2_SystemOutputVoltage : 1|14@1+ (0.1,0) [0|1638.3] "V"  VCU
+ SG_ FCU2_FC_Power : 15|13@1+ (0.1,0) [0|819.1] "kW"  VCU
+ SG_ FCU2_FC_Current : 28|14@1+ (0.1,0) [0|1638.3] "A"  VCU
+ SG_ FCU2_FC_Voltage : 42|14@1+ (0.1,0) [0|1638.3] "V"  VCU
+ SG_ FCU2_HeartBeat : 56|8@1+ (1,0) [0|255] ""  VCU
+
+BO_ 2566849489 VCU_3: 8 VCU
+ SG_ VCU3_VehicleKilometrage : 0|24@1+ (0.1,0) [0|1677721.5] "km"  FCU
+ SG_ VCU3_Altitude : 24|16@1+ (1,0) [0|65535] "m"  FCU
+ SG_ VCU3_H2_SupplyPressure : 40|8@1+ (0.1,0) [0|25.5] "bar"  FCU
+
+BO_ 2566849490 FCU_03: 8 FCU
+ SG_ FCU3_CoolantInletTemp : 0|8@1+ (1,-40) [-40|215] "��"  VCU
+ SG_ FCU3_CoolantOutletTemp : 8|8@1+ (1,-40) [-40|215] "��"  VCU
+ SG_ FCU3_AirOutletTemp : 16|8@1+ (1,-40) [-40|215] "��"  VCU
+ SG_ FCU3_DCDC_Temp : 24|8@1+ (1,-40) [-40|215] "��"  VCU
+ SG_ FCU3_IntercoolerOutletTemp : 32|8@1+ (1,-40) [-40|215] "��"  VCU
+ SG_ FCU3_AirCmprssrTemp : 40|8@1+ (1,-40) [-40|215] "��"  VCU
+ SG_ FCU3_AirCmprssrCtrllrTemp : 48|8@1+ (1,-40) [-40|215] "��"  VCU
+ SG_ FCU3_AirInletTemp : 56|8@1+ (1,-40) [-40|215] "��"  VCU
+
+BO_ 2566849746 FCU_04: 8 FCU
+ SG_ FCU4_HCUValveReq : 0|2@1+ (1,0) [0|3] ""  VCU
+ SG_ FCU4_HighVoltPreChgStatus : 2|2@1+ (1,0) [0|3] ""  VCU
+ SG_ FCU4_Reserved : 4|2@1+ (1,0) [0|3] ""  VCU
+ SG_ FCU4_ControllerVoltage : 6|9@1+ (0.1,0) [0|51.1] "V"  VCU
+ SG_ FCU4_AirFlow : 15|13@1+ (0.1,0) [0|819.1] "kg/h"  VCU
+ SG_ FCU4_AirInletPressure : 28|9@1+ (0.01,-0.5) [-0.5|4.61] "Bar"  VCU
+ SG_ FCU4_H2_Pressure : 37|9@1+ (0.01,-0.5) [-0.5|4.61] "Bar"  VCU
+ SG_ FCU4_SystemEfficiency : 46|10@1+ (0.1,0) [0|102.3] "%"  VCU
+
+BO_ 2566850002 FCU_05: 8 FCU
+ SG_ FCU5_AirCmpVoltage : 0|16@1+ (0.1,0) [0|6553.5] "V"  VCU
+ SG_ FCU5_AirCmpCurrent : 16|16@1+ (0.1,0) [0|6553.5] "A"  VCU
+ SG_ FCU5_H2PumpVoltage : 32|16@1+ (0.1,0) [0|6553.5] "V"  VCU
+ SG_ FCU5_H2PumpCurrent : 48|16@1+ (0.1,0) [0|6553.5] "A"  VCU
+
+BO_ 2566852818 FCU_10: 8 FCU
+ SG_ FCU10_SoftwareVersionBranch : 0|16@1+ (1,0) [0|65535] ""  VCU
+ SG_ FCU10_UinqSerialNumber : 16|20@1+ (1,1900000) [1900000|2948575] ""  VCU
+ SG_ FCU10_FC_TempAmount : 36|4@1+ (1,0) [0|15] ""  VCU
+ SG_ FCU10_H2_Consume_Kg : 40|24@1+ (0.1,0) [0|1677721.5] "kg"  VCU
+
+BO_ 2566853074 FCU_11: 8 FCU
+ SG_ FCU11_DCDC_Output_kWh : 0|28@1+ (1,0) [0|268435455] "kWh"  VCU
+ SG_ FCU11_FC_Output_kWh : 28|28@1+ (1,0) [0|268435455] "kWh"  VCU
+ SG_ FCU11_H2ConsumekWhKg : 56|8@1+ (0.1,0) [0|25.5] "kWh/kg"  VCU
+
+BO_ 2566853330 FCU_12: 8 FCU
+ SG_ FCU12_FC_StartTimes : 0|16@1+ (1,0) [0|65535] ""  VCU
+ SG_ FCU12_FC_RunHours : 16|20@1+ (0.1,0) [0|104857.5] "hour"  VCU
+ SG_ FCU12_PowerOnHours : 36|20@1+ (0.1,0) [0|104857.5] "hour"  VCU
+
+
+
+CM_ SG_ 2566848977 VCU1_FCSMaxOutVolt "ȼ��ϵͳ��������ѹ-FCS(Fuel Cell System) output voltage upper limit";
+CM_ SG_ 2566848977 VCU1_ReqPower "VCU������-VCU power demand";
+CM_ SG_ 2566848977 VCU1_OnVoltageActive "��FCU��ON���ź�-Vehicle ON signal";
+CM_ SG_ 2566848977 VCU1_StartFCS "FCS��ͣ-FCS start command";
+CM_ SG_ 2566848977 VCU1_HighVoltStatus "��ѹ��ͨ״̬-High voltage connect status";
+CM_ SG_ 2566848977 VCU1_EmrgncyShtdwnFCS "FCS����ͣ��-FCS emergency stop command";
+CM_ SG_ 2566848977 VCU1_VehicleSpeed "����-Vehicle speed";
+CM_ SG_ 2566848977 VCU1_FCSHeatAllowed "������������-FCS standby heat allowed";
+CM_ SG_ 2566848978 FCU1_Phase "FSC״̬-Working phase/state of FCS";
+CM_ SG_ 2566848978 FCU1_DCDCStatus "��ѹDCDC״̬-Working state of boost DC/DC";
+CM_ SG_ 2566848978 FCU1_WaterLevelLow "Waterˮ��Һλ����-Water tank level low alarm";
+CM_ SG_ 2566848978 FCU1_ConductivityHigh "��ȴҺ�絼�ʹ��߱���-Coolant conductivity high alarm";
+CM_ SG_ 2566848978 FCU1_FaultLevel "ȼ��ϵͳ��߹��ϵȼ�-FCS fault level";
+CM_ SG_ 2566848978 FCU1_FaultCode "������-FCS fault code";
+CM_ SG_ 2566848978 FCU1_AllowedPower "ȼ�ϵ�ؿɼ��ع���-Maximum output allowable power";
+CM_ SG_ 2566848978 FCU1_SystemOutputPower "FCS�������-FCS output power";
+CM_ SG_ 2566848978 FCU1_SystemOutputCurrent "FCS�������-FCS output current";
+CM_ SG_ 2566849233 VCU2_LiSOC "﮵��SOC-Lithium battery SOC";
+CM_ SG_ 2566849233 VCU2_MaxChargeCurrent "�������������-Max allowable charging current";
+CM_ SG_ 2566849233 VCU2_P_InsulationRes "BMS������Ե��ֵ-BMS+ insulation resistance";
+CM_ SG_ 2566849233 VCU2_N_InsulationRes "BMS������Ե��ֵ-BMS- insulation resistance";
+CM_ SG_ 2566849233 VCU2_AmbientTemperature "�����¶�-Environment temperature";
+CM_ SG_ 2566849234 FCU2_SystemOutputVoltage "DCDC�����ѹ-FCS output voltage";
+CM_ SG_ 2566849234 FCU2_FC_Power "FC�������-Fuel cell  power";
+CM_ SG_ 2566849234 FCU2_FC_Current "ȼ�ϵ�ص���-Fuel cell  current";
+CM_ SG_ 2566849234 FCU2_FC_Voltage "ȼ�ϵ�ص�ѹ-Fuel cell  voltage";
+CM_ SG_ 2566849234 FCU2_HeartBeat "ȼ��ϵͳ�����ź�-Heart beat signal";
+CM_ SG_ 2566849489 VCU3_VehicleKilometrage "���������-Vehicle kilometrage";
+CM_ SG_ 2566849489 VCU3_Altitude "����-Altitude";
+CM_ SG_ 2566849489 VCU3_H2_SupplyPressure "����ȼ��ϵͳ������ѹ��-Hydrogen supply pressure of FCS";
+CM_ SG_ 2566849490 FCU3_CoolantInletTemp "��ѽ�ˮ���¶�-Coolant inlet temperature";
+CM_ SG_ 2566849490 FCU3_CoolantOutletTemp "��ѳ�ˮ���¶�-Coolant outle temperature";
+CM_ SG_ 2566849490 FCU3_AirOutletTemp "��ѿ����������¶�-Air outlet temperature";
+CM_ SG_ 2566849490 FCU3_DCDC_Temp "DCDC�¶�-Boost DC/DC temperature";
+CM_ SG_ 2566849490 FCU3_IntercoolerOutletTemp "��������������¶�-Intercooler outlet tempearture";
+CM_ SG_ 2566849490 FCU3_AirCmprssrTemp "��ѹ���¶�-Air compressor motor temperature";
+CM_ SG_ 2566849490 FCU3_AirCmprssrCtrllrTemp "��ѹ���������¶�-Air compressor controller temperature";
+CM_ SG_ 2566849490 FCU3_AirInletTemp "��ѿ����������¶�-Air inlet temperature";
+CM_ SG_ 2566849746 FCU4_HCUValveReq "ƿ������-H2 cylinder open request";
+CM_ SG_ 2566849746 FCU4_HighVoltPreChgStatus "��ѹԤ��״̬-High voltage contactor status, in boost DCDC";
+CM_ SG_ 2566849746 FCU4_ControllerVoltage "�����������ѹ-Controller power supply voltage, low voltage-24V";
+CM_ SG_ 2566849746 FCU4_AirFlow "��������-Cathode air flow";
+CM_ SG_ 2566849746 FCU4_AirInletPressure "��������ѹ��-Cathode air inlet pressure";
+CM_ SG_ 2566849746 FCU4_H2_Pressure "����ѹ��-Anode H2 pressure";
+CM_ SG_ 2566849746 FCU4_SystemEfficiency "ϵͳЧ��-FCS efficiency";
+CM_ SG_ 2566850002 FCU5_AirCmpVoltage "��ѹ�������ѹ-Air compressor supply voltage";
+CM_ SG_ 2566850002 FCU5_AirCmpCurrent "��ѹ���������-Air compressor supply current";
+CM_ SG_ 2566850002 FCU5_H2PumpVoltage "����ѭ���ù����ѹ-H2 circulating pump supply voltage";
+CM_ SG_ 2566850002 FCU5_H2PumpCurrent "����ѭ���ù������-H2 circulating pump supply current";
+CM_ SG_ 2566852818 FCU10_SoftwareVersionBranch "�����汾��-Software version number";
+CM_ SG_ 2566852818 FCU10_UinqSerialNumber "��ѱ��-Fuel cell serial number";
+CM_ SG_ 2566852818 FCU10_FC_TempAmount "ȼ�ϵ���¶�̽������-Total number of fuel cell temperature probes";
+CM_ SG_ 2566852818 FCU10_H2_Consume_Kg "�ۼ�H2������-Cumulative H2 consumption (kg)";
+CM_ SG_ 2566853074 FCU11_DCDC_Output_kWh "DCDC�ۼƷ�����-Boost DC/DC cumulative power generation(kWh)";
+CM_ SG_ 2566853074 FCU11_FC_Output_kWh "ȼ�ϵ���ۼƷ�����-fuel cell cumulative power generation(kwh)";
+CM_ SG_ 2566853074 FCU11_H2ConsumekWhKg "1kg����������-Power generation per 1kg of hydrogen";
+CM_ SG_ 2566853330 FCU12_FC_StartTimes "ϵͳ��������-System startup times";
+CM_ SG_ 2566853330 FCU12_FC_RunHours "FC�ۼ�����ʱ��-System cumulative running time(h)";
+CM_ SG_ 2566853330 FCU12_PowerOnHours "�ۼ��ϵ�ʱ��-System cumulative power on time(h)";
+BA_DEF_  "BusType" STRING ;
+BA_DEF_ SG_  "GenSigStartValue" INT 0 0;
+BA_DEF_ BO_  "GenMsgCycleTime" INT 0 0;
+BA_DEF_DEF_  "BusType" "CAN";
+BA_DEF_DEF_  "GenSigStartValue" 0;
+BA_DEF_DEF_  "GenMsgCycleTime" 0;
+BA_ "BusType" "CAN";
+BA_ "GenMsgCycleTime" BO_ 2566848977 100;
+BA_ "GenMsgCycleTime" BO_ 2566848978 100;
+BA_ "GenMsgCycleTime" BO_ 2566849233 100;
+BA_ "GenMsgCycleTime" BO_ 2566849234 100;
+BA_ "GenMsgCycleTime" BO_ 2566849489 100;
+BA_ "GenMsgCycleTime" BO_ 2566849490 100;
+BA_ "GenMsgCycleTime" BO_ 2566849746 100;
+BA_ "GenMsgCycleTime" BO_ 2566850002 100;
+BA_ "GenMsgCycleTime" BO_ 2566852818 5000;
+BA_ "GenMsgCycleTime" BO_ 2566853074 5000;
+BA_ "GenMsgCycleTime" BO_ 2566853330 5000;
+BA_ "GenSigStartValue" SG_ 2566849233 VCU2_AmbientTemperature 0;
+BA_ "GenSigStartValue" SG_ 2566849490 FCU3_CoolantInletTemp 0;
+BA_ "GenSigStartValue" SG_ 2566849490 FCU3_CoolantOutletTemp 0;
+BA_ "GenSigStartValue" SG_ 2566849490 FCU3_AirOutletTemp 0;
+BA_ "GenSigStartValue" SG_ 2566849490 FCU3_DCDC_Temp 0;
+BA_ "GenSigStartValue" SG_ 2566849490 FCU3_IntercoolerOutletTemp 0;
+BA_ "GenSigStartValue" SG_ 2566849490 FCU3_AirCmprssrTemp 0;
+BA_ "GenSigStartValue" SG_ 2566849490 FCU3_AirCmprssrCtrllrTemp 0;
+BA_ "GenSigStartValue" SG_ 2566849490 FCU3_AirInletTemp 0;
+BA_ "GenSigStartValue" SG_ 2566849746 FCU4_AirInletPressure 0;
+BA_ "GenSigStartValue" SG_ 2566849746 FCU4_H2_Pressure 0;
+BA_ "GenSigStartValue" SG_ 2566853074 FCU11_DCDC_Output_kWh 0;
