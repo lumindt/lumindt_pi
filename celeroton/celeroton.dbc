@@ -1,0 +1,239 @@
+VERSION "4.2.0.6"
+
+
+NS_ : 
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	CAT_DEF_
+	CAT_
+	FILTER
+	BA_DEF_DEF_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_TABLE_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_REL_
+	BA_DEF_DEF_REL_
+	BU_SG_REL_
+	BU_EV_REL_
+	BU_BO_REL_
+	SG_MUL_VAL_
+
+BS_:
+
+BU_: BusMaster CAN_CC300x
+
+
+BO_ 160 SurgeProtectionInput: 8 BusMaster
+ SG_ Surge_UpdateInletPressure : 58|1@0+ (1,0) [0|1] ""  CAN_CC300x
+ SG_ Surge_UpdateMassflow : 57|1@0+ (1,0) [0|1] ""  CAN_CC300x
+ SG_ Surge_UpdateOutletPressure : 59|1@0+ (1,0) [0|1] ""  CAN_CC300x
+ SG_ Surge_UpdateInletTemp : 56|1@0+ (1,0) [0|1] ""  CAN_CC300x
+ SG_ Surge_OutletPressure : 47|16@0+ (1,0) [0|65535] "mBar"  CAN_CC300x
+ SG_ Surge_InletPressure : 31|16@0+ (1,0) [0|65535] "mBar"  CAN_CC300x
+ SG_ Surge_Massflow : 15|16@0- (0.1,0) [-3276.8|3276.7] "g/s"  CAN_CC300x
+ SG_ Surge_InletTemp : 7|8@0- (1,0) [-128|127] "°C"  CAN_CC300x
+
+BO_ 93 DiagnosticsInfoAnswer: 8 CAN_CC300x
+ SG_ GasBearingCondition m0 : 63|8@0+ (1,0) [0|0] ""  BusMaster
+ SG_ DiagInfoAns_Mux M : 7|8@0+ (1,0) [0|0] ""  BusMaster
+
+BO_ 92 DiagnosticsInfoRequest: 1 BusMaster
+ SG_ DiagInfoReq : 7|8@0+ (1,0) [0|0] ""  CAN_CC300x
+
+BO_ 87 Meas3: 6 CAN_CC300x
+ SG_ T_thc : 39|16@0- (0.1,0) [-3276.8|3276.7] "°C"  BusMaster
+ SG_ T_ptc : 23|16@0- (0.1,0) [-3276.8|3276.7] "°C"  BusMaster
+ SG_ T_conv : 7|16@0- (0.1,0) [-3276.8|3276.7] "°C"  BusMaster
+
+BO_ 86 Meas2: 8 CAN_CC300x
+ SG_ P_out : 55|16@0- (1,0) [-32768|32767] "W"  BusMaster
+ SG_ Uin_LV : 39|16@0+ (0.01,0) [0|655.35] "V"  BusMaster
+ SG_ Uin_HV : 23|16@0+ (0.1,0) [0|6553.5] "V"  BusMaster
+ SG_ Uph : 7|16@0+ (0.1,0) [0|6553.5] "V"  BusMaster
+
+BO_ 85 Meas1: 8 CAN_CC300x
+ SG_ Iph_ref : 55|16@0- (0.01,0) [-327.68|327.67] "A"  BusMaster
+ SG_ Iph : 39|16@0- (0.01,0) [-327.68|327.67] "A"  BusMaster
+ SG_ Speed_Ref_readBack : 7|32@0- (1,0) [-2147483648|2147483647] "rpm"  BusMaster
+
+BO_ 84 Settings: 8 BusMaster
+ SG_ IDoffset : 39|32@0+ (1,0) [1|536869886] ""  CAN_CC300x
+ SG_ MeasBroadcast : 0|1@0+ (1,0) [0|1] ""  CAN_CC300x
+ SG_ Baudrate : 23|8@0+ (1,0) [0|8] ""  CAN_CC300x
+ SG_ timeout_onOff : 2|1@0+ (1,0) [0|1] ""  CAN_CC300x
+ SG_ timeout : 15|8@0+ (0.1,0) [0|10] "s"  CAN_CC300x
+ SG_ TermRes : 1|1@0+ (1,0) [0|1] ""  CAN_CC300x
+
+BO_ 91 ConvInfoAnswer: 8 CAN_CC300x
+ SG_ BootloaderVersion m6 : 63|8@0+ (1,0) [0|0] ""  BusMaster
+ SG_ FirmwareVersion m5 : 55|16@0+ (1,0) [0|0] ""  BusMaster
+ SG_ SerialNumberPart3 m4 : 15|56@0+ (1,0) [0|0] ""  BusMaster
+ SG_ SerialNumberPart2 m3 : 15|56@0+ (1,0) [0|0] ""  BusMaster
+ SG_ SerialNumberPart1 m2 : 15|56@0+ (1,0) [0|0] ""  BusMaster
+ SG_ ArticleRevision m1 : 39|32@0+ (1,0) [0|0] ""  BusMaster
+ SG_ ArticleNumber m0 : 39|32@0+ (1,0) [0|0] ""  BusMaster
+ SG_ ConvInfoAns_Mux M : 7|8@0+ (1,0) [0|0] ""  BusMaster
+
+BO_ 90 ConvInfoRequest: 1 BusMaster
+ SG_ ConvInfoReq_Mux : 7|8@0+ (1,0) [0|4] ""  CAN_CC300x
+
+BO_ 83 Errors: 8 CAN_CC300x
+ SG_ Err_Interlock : 32|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_CompSurge : 8|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_CommError : 56|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_InternalComm : 58|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_GasBearing3 : 14|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_GasBearing2 : 44|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_GasBearing1 : 43|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_Auxiliary : 36|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_LV_InputUV : 11|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_LV_InputOV : 10|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_CAN_timeout : 51|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_iDC1_trip : 33|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_iDC2_trip : 34|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_iDC3_trip : 35|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_i_invU_trip : 45|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_i_invV_trip : 46|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_i_invW_trip : 47|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_Stall1 : 63|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_Overspeed : 29|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_MotOT : 31|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_HV_InputUV : 25|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_HV_InputOV : 24|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Err_ConvOT : 30|1@0+ (1,0) [0|1] ""  BusMaster
+
+BO_ 82 Info_and_Warning: 8 CAN_CC300x
+ SG_ Info_CompSurge : 8|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Info_GasBearing3 : 14|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Info_LVInputUV : 11|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Info_LVInputOV : 10|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Info_uph_limit : 26|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Info_power_limit : 28|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Info_iph_limit : 27|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Info_HVInputUV : 25|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Info_HVInputOV : 24|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Info_ConvOT : 30|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Info_MotOT : 31|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Warn_uph_limit : 58|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Warn_iph_limit : 59|1@0+ (1,0) [0|1] ""  BusMaster
+ SG_ Warn_power_limit : 60|1@0+ (1,0) [0|1] ""  BusMaster
+
+BO_ 81 Status: 8 CAN_CC300x
+ SG_ state : 3|4@0+ (1,0) [0|4] ""  BusMaster
+ SG_ speed : 39|32@0- (1,0) [-2147483648|2147483647] "rpm"  BusMaster
+
+BO_ 80 Setpoint: 8 BusMaster
+ SG_ Error_ack : 1|1@0+ (1,0) [0|1] ""  CAN_CC300x
+ SG_ StartStop : 0|1@0+ (1,0) [0|1] ""  CAN_CC300x
+ SG_ Speed_Ref : 39|32@0- (1,0) [-2147483648|2147483647] ""  CAN_CC300x
+
+
+
+CM_ BO_ 160 "Providing the converter with compressor measurements for surge protection (should be transmitted every 100ms)";
+CM_ SG_ 160 Surge_OutletPressure "Absolute pressure at compressor outlet in mBar.";
+CM_ SG_ 160 Surge_InletPressure "Absolute pressure at compressor inlet in mBar.";
+CM_ SG_ 160 Surge_Massflow "10*m_gas, m_gas = massflow in g/s.";
+CM_ SG_ 160 Surge_InletTemp "Temperature of the gas at the compressor inlet in °C.";
+CM_ BO_ 87 "transmitted every 100ms";
+CM_ SG_ 87 T_thc "Motor temperature";
+CM_ SG_ 87 T_ptc "Motor temperature";
+CM_ SG_ 87 T_conv "Converter temperature";
+CM_ BO_ 86 "transmitted every 100ms";
+CM_ SG_ 86 P_out "actual output power";
+CM_ SG_ 86 Uin_LV "measured voltage at the low voltage input";
+CM_ SG_ 86 Uin_HV "measured input voltage";
+CM_ SG_ 86 Uph "actual phase voltage (rms)";
+CM_ BO_ 85 "transmitted every 100ms";
+CM_ SG_ 85 Iph_ref "actual phase current reference (rms)";
+CM_ SG_ 85 Iph "actual phase current (rms)";
+CM_ SG_ 85 Speed_Ref_readBack "actual active speed reference";
+CM_ SG_ 84 IDoffset "Set the CAN ID offset (default value: 0x50)";
+CM_ SG_ 84 MeasBroadcast "Switch the measurement broadcast messages on or off";
+CM_ SG_ 84 Baudrate "Set the CAN baudrate (Default: 500 kbit/s)";
+CM_ SG_ 84 timeout_onOff "Switch the CAN timeout on or off";
+CM_ SG_ 84 timeout "Set the timeout length";
+CM_ SG_ 84 TermRes "Switch the CAN termination resistor on or off";
+CM_ BO_ 91 "transmitted by the controller in answer to the ConvInfoRequest message";
+CM_ SG_ 91 BootloaderVersion "Bootloader version in the format X.X";
+CM_ SG_ 91 FirmwareVersion "Firmware version in the format X.X.X.X";
+CM_ SG_ 91 SerialNumberPart3 "Serial Number part 3";
+CM_ SG_ 91 SerialNumberPart2 "Serial Number part 2";
+CM_ SG_ 91 SerialNumberPart1 "Serial Number part 1";
+CM_ SG_ 91 ArticleRevision "Article Revision";
+CM_ SG_ 91 ArticleNumber "Article Number";
+CM_ SG_ 91 ConvInfoAns_Mux "Converter Info Mux value";
+CM_ BO_ 83 "transmitted every 100ms in case of an error";
+CM_ SG_ 83 Err_Interlock "The interlock loop is open.";
+CM_ SG_ 83 Err_CompSurge "The compressor is operated beyond the surge line";
+CM_ SG_ 83 Err_CommError "Internal communication failure, please contact Celeroton support.";
+CM_ SG_ 83 Err_InternalComm "Internal communication failure";
+CM_ SG_ 83 Err_GasBearing3 "Friction during start-up is too high please check direction of rotation.";
+CM_ SG_ 83 Err_GasBearing2 "DC link current gradient too high, rotor may have hit the stator.";
+CM_ SG_ 83 Err_GasBearing1 "DC link current too high, rotor may have hit the stator.";
+CM_ SG_ 83 Err_Auxiliary "Serious internal hardware error, please call Celeroton support.";
+CM_ SG_ 83 Err_LV_InputUV "The low voltage input is below the error limit.";
+CM_ SG_ 83 Err_LV_InputOV "The  low voltage input is above the error limit.";
+CM_ SG_ 83 Err_CAN_timeout "A CAN timeout error occurred";
+CM_ SG_ 83 Err_iDC1_trip "A hardware trip occurred, because the DC link current 1 was too high.";
+CM_ SG_ 83 Err_iDC2_trip "A hardware trip occurred, because the DC link current 2 was too high.";
+CM_ SG_ 83 Err_iDC3_trip "A hardware trip occurred, because the DC link current 3 was too high.";
+CM_ SG_ 83 Err_i_invU_trip "A hardware trip occurred, because the inverter current U was too high.";
+CM_ SG_ 83 Err_i_invV_trip "A hardware trip occurred, because the inverter current V was too high.";
+CM_ SG_ 83 Err_i_invW_trip "A hardware trip occurred, because the inverter current W was too high.";
+CM_ SG_ 83 Err_Stall1 "Failure in the sensorless speed measurement";
+CM_ SG_ 83 Err_Overspeed "Overspeed Error";
+CM_ SG_ 83 Err_MotOT "The motor temperature is above the error limit.";
+CM_ SG_ 83 Err_HV_InputUV "The HV input voltage is below the error limit.";
+CM_ SG_ 83 Err_HV_InputOV "The HV input voltage is above the error limit.";
+CM_ SG_ 83 Err_ConvOT "The converter temperature is above the error limit.";
+CM_ BO_ 82 "transmitted every 100ms in case of a warning or info";
+CM_ SG_ 82 Info_CompSurge "The compressor is operated near the surge line";
+CM_ SG_ 82 Info_GasBearing3 "Friction during start-up is higher than expected";
+CM_ SG_ 82 Info_LVInputUV "The LV input voltage is below the info limit.";
+CM_ SG_ 82 Info_LVInputOV "The LV input voltage is above the info limit.";
+CM_ SG_ 82 Info_uph_limit "The phase voltage is > 90% of the maximum phase voltage.";
+CM_ SG_ 82 Info_power_limit "The output power  is > 90% of the maximum output power.";
+CM_ SG_ 82 Info_iph_limit "The phase current is > 90% of the maximum phase current";
+CM_ SG_ 82 Info_HVInputUV "The HV input voltage is below the info limit.";
+CM_ SG_ 82 Info_HVInputOV "The HV input voltage is above the info limit.";
+CM_ SG_ 82 Info_ConvOT "The converter temperature is above the info limit.";
+CM_ SG_ 82 Info_MotOT "The motor temperature is above the info limit.";
+CM_ SG_ 82 Warn_uph_limit "The phase voltage has reached the maximum value, which depends on the input voltage.";
+CM_ SG_ 82 Warn_iph_limit "The phase current has reached the maximum phase current.";
+CM_ SG_ 82 Warn_power_limit "The output power has reached the maximum value.";
+CM_ BO_ 81 "transmitted every 100ms";
+CM_ SG_ 81 state "General status byte";
+CM_ SG_ 81 speed "Actual speed in rpm";
+CM_ SG_ 80 Error_ack "Acknowledge all errors";
+CM_ SG_ 80 StartStop "Start/Stop the machine";
+CM_ SG_ 80 Speed_Ref "Speed reference value written in setpoint message";
+BA_DEF_  "BusType" STRING ;
+BA_DEF_DEF_  "BusType" "CAN";
+BA_ "BusType" "CAN";
+VAL_ 160 Surge_UpdateInletPressure 1 "Update selection" 0 "Don't update selection" ;
+VAL_ 160 Surge_UpdateMassflow 1 "Update selection" 0 "Don't update selection" ;
+VAL_ 160 Surge_UpdateOutletPressure 1 "Update selection" 0 "Don't update selection" ;
+VAL_ 160 Surge_UpdateInletTemp 1 "Update selection" 0 "Don't update selection" ;
+VAL_ 93 DiagInfoAns_Mux 0 "Gas Bearing Condition" ;
+VAL_ 92 DiagInfoReq 0 "Gas Bearing Condition" ;
+VAL_ 84 MeasBroadcast 1 "on" 0 "off" ;
+VAL_ 84 Baudrate 8 "1000 kbit/s" 7 "reserved" 6 "500 kbit/s" 5 "250 kbit/s" 4 "125 kbit/s" 3 "100 kbit/s" 2 "50 kbit/s" 1 "20 kbit/s" 0 "reserved" ;
+VAL_ 84 timeout_onOff 1 "on" 0 "off" ;
+VAL_ 84 TermRes 1 "on" 0 "off" ;
+VAL_ 91 ConvInfoAns_Mux 255 "Unknown value" 6 "Bootloader version" 5 "Firmware version" 4 "Serial number part 3" 3 "Serial number part 2" 2 "Serial number part 1" 1 "Article revision" 0 "Article number" ;
+VAL_ 90 ConvInfoReq_Mux 6 "Bootloader version" 5 "Firmware version" 4 "Serial number part 3" 3 "Serial number part 2" 2 "Serial number part 1" 1 "Article revision" 0 "Article number" ;
+VAL_ 81 state 4 "Blocked" 3 "Degraded Operation" 2 "Running" 1 "Ready" 0 "Init/Not Ready" ;
+
