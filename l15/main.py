@@ -40,18 +40,6 @@ def safe_float(val, default=0.0):
         return default
 
 
-def print_fc_user_options():
-    print("\n--- USER COMMANDS (DISCHARGE) ---")
-    print("Press 'p' to set target power (0–10 kW)")
-    print("Press 'o' to turn fuel cell ON")
-    print("Press 'f' to turn fuel cell OFF")
-    print("Press 'j' to START both dryers")
-    print("Press 'k' to STOP both dryers")
-    print("Press 'm' to switch mode")
-    print("Press 'q' to exit")
-    print("-------------------------------\n")
-
-
 class L15System:
     def __init__(self):
         self.mode = "idle"
@@ -82,39 +70,68 @@ class L15System:
         if mode not in ["charge", "discharge", "idle"]:
             print("Invalid mode.")
             return
+
         self.mode = mode
         print(f"\n=== MODE: {mode.upper()} ===")
 
+        # ---------------------- CHARGE MODE ----------------------
         if mode == "charge":
             self.start_electrolyzers()
-            self.start_dryers()  # Auto-start dryers in charge
+            self.start_dryers()  # Auto-start dryers in charge mode
             self.stop_fuelcell()
+            print("[MODE] System is now in CHARGE mode. Electrolyzers active, dryers running, fuel cell off.")
 
+        # ---------------------- DISCHARGE MODE ----------------------
         elif mode == "discharge":
-            self.stop_electrolyzers()
+            self.stop_electrolyzers()  # Stop H₂ generation before discharging
+
             if self.fuelcell:
                 try:
+                    # Prompt user for desired power before arming FC
+                    target_power = None
+                    while target_power is None:
+                        try:
+                            user_input = input("Enter desired discharge power (0–10 kW): ").strip()
+                            target_power = float(user_input)
+                            if not (0 <= target_power <= 10):
+                                print("Invalid range. Please enter a number between 0 and 10.")
+                                target_power = None
+                        except ValueError:
+                            print("Invalid input. Please enter a numeric value.")
+
+                    print(f"[FC] Preparing for discharge at {target_power} kW...")
+
                     self.fuelcell.set_voltage(54.0)
-                    self.fuelcell.set_power(0.0)
+                    self.fuelcell.set_power(target_power)
                     self.fuelcell.fuelcell_on(False)
-                    print("[FC] Armed (OFF): target 54 V, 0 kW.")
+                    print(f"[FC] Armed (OFF): target 54 V, {target_power} kW. Press 'o' to start fuel cell.")
                 except Exception as e:
                     print(f"[FC] Arm error: {e}")
+            else:
+                print("[WARN] Fuel cell controller not available.")
 
-        else:
+        # ---------------------- IDLE MODE ----------------------
+        elif mode == "idle":
             self.stop_electrolyzers()
-            self.stop_fuelcell()
             self.stop_dryers()
+            self.stop_fuelcell()
+            print("[MODE] System is now in IDLE mode. All processes are stopped, monitoring continues.")
 
     # -------------------------------------------------------------------
     def start_electrolyzers(self):
         for ctrl in self.controllers.values():
-            ctrl.write_start_electrolyser()
+            try:
+                ctrl.write_start_electrolyser()
+            except Exception as e:
+                print(f"[EL] Start error on {ctrl}: {e}")
         print("[EL] Electrolyzers started.")
 
     def stop_electrolyzers(self):
         for ctrl in self.controllers.values():
-            ctrl.write_stop_electrolyser()
+            try:
+                ctrl.write_stop_electrolyser()
+            except Exception as e:
+                print(f"[EL] Stop error on {ctrl}: {e}")
         print("[EL] Electrolyzers stopped.")
 
     def stop_fuelcell(self):
@@ -129,7 +146,6 @@ class L15System:
 
     # -------------------------------------------------------------------
     def read_electrolyzer_data(self):
-        """Read all electrolyzers’ data, including new production rate field."""
         data = {}
         total_flow = 0.0
         total_prod_rate = 0.0
@@ -255,7 +271,6 @@ class L15System:
                     round(data.get(f"{prefix}temp_C", 0), 1),
                 ])
 
-        # Totals
         rows.append([
             "", "—", "TOTAL", "", "", round(data.get("total_power_kW", 0), 3),
             round(data.get("total_flow_NLh", 0), 1),
@@ -264,24 +279,7 @@ class L15System:
         ])
 
         headers = ["#", "IP", "State", "V (V)", "I (A)", "P (kW)",
-                   "Flow (NL/h)", "Prod. Rate (%)", "Temp (°C)"]
-        return tabulate(rows, headers=headers, tablefmt="fancy_grid")
-
-    # -------------------------------------------------------------------
-    def format_fuelcell_table(self, fc, al):
-        rows = [[
-            fc.get("fc_phase", "N/A"),
-            round(fc.get("fc_voltage_V", 0), 2),
-            round(fc.get("fc_power_kW", 0), 2),
-            round(fc.get("fc_target_voltage_V", 0), 2),
-            round(fc.get("fc_target_power_kW", 0), 2),
-            round(al.get("mass_flow_gps", 0), 2),
-            round(al.get("volumetric_flow_slpm", 0), 2),
-        ]]
-        headers = [
-            "Phase", "Voltage (V)", "Power (kW)", "Target V", "Target P",
-            "Mass Flow (g/s)", "Vol Flow (SLPM)"
-        ]
+                   "Flow (NL/h)", "Prod Rate (NL/h)", "Temp (°C)"]
         return tabulate(rows, headers=headers, tablefmt="fancy_grid")
 
     # -------------------------------------------------------------------
@@ -291,7 +289,6 @@ class L15System:
         while True:
             try:
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
                 data = self.read_electrolyzer_data()
                 fc = self.read_fuelcell_block()
                 al = self.read_alicat_data()
@@ -302,37 +299,55 @@ class L15System:
                 print("ELECTROLYZER STATUS:")
                 print(self.format_electrolyzer_table(data))
                 print("\nFUEL CELL STATUS:")
-                print(self.format_fuelcell_table(fc, al))
+                print(tabulate([[fc.get("fc_phase", "N/A"),
+                                 round(fc.get("fc_voltage_V", 0), 2),
+                                 round(fc.get("fc_power_kW", 0), 2),
+                                 round(fc.get("fc_target_voltage_V", 0), 2),
+                                 round(fc.get("fc_target_power_kW", 0), 2),
+                                 round(al.get("mass_flow_gps", 0), 2),
+                                 round(al.get("volumetric_flow_slpm", 0), 2)]],
+                               headers=["Phase", "Voltage (V)", "Power (kW)", "Target V", "Target P",
+                                        "Mass Flow (g/s)", "Vol Flow (SLPM)"],
+                               tablefmt="fancy_grid"))
                 print("\nDRYER STATUS:")
                 print(self.format_dryer_table(dryer_rows))
                 print("=" * 70)
 
-                # Dynamic hotkey help
+                # Hotkey hints
                 if self.mode == "idle":
                     print("Hotkeys: 'm' switch mode | 'q' quit")
-
                 elif self.mode == "charge":
                     print("Hotkeys: 'r' set production rate | 'm' switch mode | 'q' quit")
-
                 elif self.mode == "discharge":
                     print("Hotkeys: 'p' set FC power | 'o' FC ON | 'f' FC OFF | 'm' switch mode | 'q' quit")
 
+                # Handle keypresses (guard against select errors)
+                try:
+                    rlist, _, _ = select.select([sys.stdin], [], [], 0)
+                except Exception:
+                    rlist = []
 
-                if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-                    key = sys.stdin.read(1).strip().lower()
+                if sys.stdin in rlist:
+                    try:
+                        key = sys.stdin.read(1).strip().lower()
+                    except Exception:
+                        key = ""
+
                     if key == "q":
                         print("Exiting system loop...")
                         break
                     elif key == "m":
                         print("\nSwitching mode...")
                         self.prompt_mode_change()
-                        return
-                    elif self.mode == "discharge" and self.fuelcell:
+                        continue  # keep looping after mode switch
+
+                    elif self.mode == "discharge":
                         if key == "p":
                             try:
                                 target = float(input("Enter target power (0–10 kW): ").strip())
                                 if 0 <= target <= 10:
-                                    self.fuelcell.set_power(target)
+                                    if self.fuelcell:
+                                        self.fuelcell.set_power(target)
                                     print(f"[FC] Target power set to {target} kW.")
                                 else:
                                     print("Invalid power value.")
@@ -340,37 +355,44 @@ class L15System:
                                 print("Invalid input.")
                         elif key == "o":
                             try:
-                                self.fuelcell.fuelcell_on(True)
+                                if self.fuelcell:
+                                    self.fuelcell.fuelcell_on(True)
                                 print("[FC] Fuel cell turned ON.")
                             except Exception as e:
                                 print(f"[FC] ON error: {e}")
                         elif key == "f":
                             try:
-                                self.fuelcell.fuelcell_on(False)
+                                if self.fuelcell:
+                                    self.fuelcell.fuelcell_on(False)
                                 print("[FC] Fuel cell turned OFF.")
                             except Exception as e:
                                 print(f"[FC] OFF error: {e}")
-                    elif self.mode == "charge":
-                        if key == "r":  # new hotkey to adjust electrolyzer production rate
-                            try:
-                                rate = float(input("Enter new target production rate (NL/h per stack): ").strip())
-                                if rate < 0:
-                                    print("Invalid rate.")
-                                else:
-                                    for ctrl in self.controllers.values():
-                                        try:
-                                            ctrl.write_target_production_rate(rate)
-                                        except AttributeError:
-                                            print(f"[WARN] Controller {ctrl} has no write_target_production_rate() method.")
-                                        except Exception as e:
-                                            print(f"[EL] Rate set error: {e}")
-                                    print(f"[EL] Target production rate set to {rate} NL/h for all electrolyzers.")
-                            except ValueError:
-                                print("Invalid input.")
 
-                                time.sleep(1)
-                            except KeyboardInterrupt:
-                                break
+                    elif self.mode == "charge" and key == "r":
+                        try:
+                            rate = float(input("Enter new target production rate (NL/h per stack): ").strip())
+                            if rate < 0:
+                                print("Invalid rate.")
+                            else:
+                                for ctrl in self.controllers.values():
+                                    try:
+                                        ctrl.write_target_production_rate(rate)
+                                    except AttributeError:
+                                        print(f"[WARN] Controller {ctrl} has no write_target_production_rate() method.")
+                                    except Exception as e:
+                                        print(f"[EL] Rate set error: {e}")
+                                print(f"[EL] Target production rate set to {rate} NL/h for all electrolyzers.")
+                        except ValueError:
+                            print("Invalid input.")
+
+                time.sleep(1)
+
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                # Don’t crash entire loop on transient errors; log and continue.
+                print(f"[LOOP] Unexpected error: {e}")
+                time.sleep(1)
 
     # -------------------------------------------------------------------
     def prompt_mode_change(self):
@@ -381,7 +403,7 @@ class L15System:
         choice = input("Select new mode [1–3]: ").strip()
         new_mode = "charge" if choice == "1" else "discharge" if choice == "2" else "idle"
         self.set_mode(new_mode)
-        self.run_loop()
+        print(f"[MODE] Switched to {self.mode.upper()} — monitoring continues.\n")
 
     # -------------------------------------------------------------------
     def shutdown(self):
@@ -411,6 +433,7 @@ if __name__ == "__main__":
         system.set_mode("charge" if choice == "1" else "discharge" if choice == "2" else "idle")
         system.run_loop()
     except KeyboardInterrupt:
-        pass
+        print("\n[CTRL+C] Exiting...")
     finally:
+        # Only shutdown when exiting the program (not on mode change)
         system.shutdown()
