@@ -13,7 +13,7 @@ class FuelCellController:
 
         self.bus = can.interface.Bus(channel='can0', interface='socketcan')  # Set up the CAN bus for FC
 
-        self.db = cantools.database.load_file('FCU.dbc')
+        self.db = cantools.database.load_file('horizon_fc/FCU.dbc')
         self.debug = debug
         self.name = 'VCU_1'
         self.template = self.db.get_message_by_name(self.name)
