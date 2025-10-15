@@ -9,11 +9,20 @@ from horizon_fc.FuelCellController import FuelCellController
 from horizon_fc.alicat import Controller as AlicatController
 import utils
 
-SAVE_INTERVAL = 5  # seconds
 ENAPTER_HOSTS = [
     "10.1.10.53", "10.1.10.54", "10.1.10.55", "10.1.10.56",
     "10.1.10.57", "10.1.10.58", "10.1.10.59", "10.1.10.60"
 ]
+
+DRYER_HOSTS = ["10.1.10.53", "10.1.10.57"]
+DRYER_STATES = {
+    257: 'WAITING FOR POWER', 263: 'WAITING FOR PRESSURE',
+    259: 'STOPPED BY USER', 260: 'STARTING',
+    262: 'STANDBY', 265: 'IDLE',
+    513: 'DRYING', 514: 'COOLING', 515: 'SWITCHING',
+    516: 'PRESSURIZING', 517: 'FINALIZING',
+    1281: 'ERROR', 1537: 'BYPASS', 2305: 'MAINTENANCE'
+}
 
 
 def safe_read(func, fallback=float("nan")):
@@ -36,6 +45,8 @@ def print_fc_user_options():
     print("Press 'p' to set target power (0–10 kW)")
     print("Press 'o' to turn fuel cell ON")
     print("Press 'f' to turn fuel cell OFF")
+    print("Press 'j' to START both dryers")
+    print("Press 'k' to STOP both dryers")
     print("Press 'm' to switch mode")
     print("Press 'q' to exit")
     print("-------------------------------\n")
@@ -44,10 +55,9 @@ def print_fc_user_options():
 class L15System:
     def __init__(self):
         self.mode = "idle"
-        self.last_save = 0
         self.controllers = {ip: ElectrolyzerModbusController(host=ip) for ip in ENAPTER_HOSTS}
+        self.dryers = {ip: ElectrolyzerModbusController(host=ip) for ip in DRYER_HOSTS}
 
-        # Alicat init
         try:
             print("Initializing Alicat controller...")
             self.alicat = AlicatController()
@@ -57,7 +67,6 @@ class L15System:
             self.alicat_ready = False
             self.alicat = None
 
-        # Fuel cell init — handle missing CAN gracefully
         try:
             print("Initializing FuelCellController...")
             self.fuelcell = FuelCellController(debug=False)
@@ -78,6 +87,7 @@ class L15System:
 
         if mode == "charge":
             self.start_electrolyzers()
+            self.start_dryers()  # Auto-start dryers in charge
             self.stop_fuelcell()
 
         elif mode == "discharge":
@@ -94,6 +104,7 @@ class L15System:
         else:
             self.stop_electrolyzers()
             self.stop_fuelcell()
+            self.stop_dryers()
 
     # -------------------------------------------------------------------
     def start_electrolyzers(self):
@@ -117,19 +128,28 @@ class L15System:
                 print(f"[FC] Stop error: {e}")
 
     # -------------------------------------------------------------------
-    # ---------- CHARGE: Enapter Read ----------
     def read_electrolyzer_data(self):
+        """Read all electrolyzers’ data, including new production rate field."""
         data = {}
         total_flow = 0.0
+        total_prod_rate = 0.0
+        total_power = 0.0
+
         for idx, (ip, ctrl) in enumerate(self.controllers.items(), start=1):
             voltage = safe_read(ctrl.display_stack_voltage)
             current = safe_read(ctrl.display_stack_current)
             power = (voltage * current) / 1000 if not isnan(voltage) and not isnan(current) else float("nan")
             flow = safe_read(ctrl.display_stack_H2_flow_rate)
+            prod_rate = safe_read(ctrl.display_production_rate)
             temp = safe_read(ctrl.display_electrolyte_temperature)
             state = safe_read(ctrl.display_electrolyser_state, "Unknown")
+
             if not isnan(flow):
                 total_flow += flow
+            if not isnan(prod_rate):
+                total_prod_rate += prod_rate
+            if not isnan(power):
+                total_power += power
 
             data[f"E{idx}_ip"] = ip
             data[f"E{idx}_state"] = state
@@ -137,14 +157,50 @@ class L15System:
             data[f"E{idx}_current"] = current
             data[f"E{idx}_power_kW"] = power
             data[f"E{idx}_flow_NLh"] = flow
+            data[f"E{idx}_prod_rate_NLh"] = prod_rate
             data[f"E{idx}_temp_C"] = temp
 
         data["total_flow_NLh"] = total_flow
+        data["total_prod_rate_NLh"] = total_prod_rate
+        data["total_power_kW"] = total_power
         return data
 
-    # ---------- DISCHARGE: Fuel Cell + Alicat ----------
+    # -------------------------------------------------------------------
+    def read_dryer_states(self):
+        rows = []
+        for i, (ip, d) in enumerate(self.dryers.items(), start=1):
+            try:
+                code = safe_read(d.display_dryer_state, None)
+                if code is None or (isinstance(code, float) and isnan(code)):
+                    state = "Unavailable"
+                else:
+                    state = DRYER_STATES.get(int(code), f"Unknown ({code})")
+            except Exception as e:
+                state = f"Error: {e}"
+            rows.append([i, ip, state])
+        return rows
+
+    def format_dryer_table(self, rows):
+        return tabulate(rows, headers=["#", "IP", "Dryer State"], tablefmt="fancy_grid")
+
+    def start_dryers(self):
+        for d in self.dryers.values():
+            try:
+                d.write_start_dryer()
+            except Exception as e:
+                print(f"[DRYER] Start error: {e}")
+        print("[DRYER] Start command sent to both dryers.")
+
+    def stop_dryers(self):
+        for d in self.dryers.values():
+            try:
+                d.write_stop_dryer()
+            except Exception as e:
+                print(f"[DRYER] Stop error: {e}")
+        print("[DRYER] Stop command sent to both dryers.")
+
+    # -------------------------------------------------------------------
     def read_fuelcell_block(self):
-        """Return a dict with FC values needed for the status block."""
         if not self.fuelcell:
             return dict(
                 fc_power_kW=0.0,
@@ -183,7 +239,6 @@ class L15System:
 
     # -------------------------------------------------------------------
     def format_electrolyzer_table(self, data):
-        """Create a table for all electrolyzers."""
         rows = []
         for i in range(1, 9):
             prefix = f"E{i}_"
@@ -196,13 +251,24 @@ class L15System:
                     round(data.get(f"{prefix}current", 0), 3),
                     round(data.get(f"{prefix}power_kW", 0), 5),
                     round(data.get(f"{prefix}flow_NLh", 0), 1),
+                    round(data.get(f"{prefix}prod_rate_NLh", 0), 1),
                     round(data.get(f"{prefix}temp_C", 0), 1),
                 ])
-        headers = ["#", "IP", "State", "V (V)", "I (A)", "P (kW)", "Flow (NL/h)", "Temp (°C)"]
+
+        # Totals
+        rows.append([
+            "", "—", "TOTAL", "", "", round(data.get("total_power_kW", 0), 3),
+            round(data.get("total_flow_NLh", 0), 1),
+            round(data.get("total_prod_rate_NLh", 0), 1),
+            ""
+        ])
+
+        headers = ["#", "IP", "State", "V (V)", "I (A)", "P (kW)",
+                   "Flow (NL/h)", "Prod. Rate (%)", "Temp (°C)"]
         return tabulate(rows, headers=headers, tablefmt="fancy_grid")
 
+    # -------------------------------------------------------------------
     def format_fuelcell_table(self, fc, al):
-        """Create a small summary table for the fuel cell."""
         rows = [[
             fc.get("fc_phase", "N/A"),
             round(fc.get("fc_voltage_V", 0), 2),
@@ -222,70 +288,14 @@ class L15System:
     def run_loop(self):
         print(f"Running system in {self.mode.upper()} mode. (Press Ctrl+C to exit)")
 
-        if self.mode == "discharge":
-            last_save_time = 0
-            fc_is_on = False
-
-            while True:
-                try:
-                    now_str = time.strftime('%Y-%m-%d %H:%M:%S')
-
-                    if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-                        key = sys.stdin.read(1).strip().lower()
-                        if key == 'p' and self.fuelcell:
-                            try:
-                                target_power = float(input("Enter new target power (0 - 10 kW): "))
-                                target_power = utils.clamp(0, target_power, 10)
-                                print(f"Setting target power to {target_power} kW...")
-                                self.fuelcell.set_power(target_power)
-                                time.sleep(0.3)
-                                if target_power > 0:
-                                    self.fuelcell.fuelcell_on(True)
-                                    fc_is_on = True
-                            except ValueError:
-                                print("Invalid input.")
-                        elif key == 'o' and self.fuelcell:
-                            self.fuelcell.fuelcell_on(True)
-                            fc_is_on = True
-                        elif key == 'f' and self.fuelcell:
-                            self.fuelcell.fuelcell_on(False)
-                            fc_is_on = False
-                        elif key == 'm':
-                            print("\nSwitching mode...")
-                            self.prompt_mode_change()
-                            return
-                        elif key == 'q':
-                            print("Exiting discharge loop...")
-                            break
-
-                    fc = self.read_fuelcell_block()
-                    al = self.read_alicat_data()
-                    ec_data = self.read_electrolyzer_data()
-
-                    print("\n" + "=" * 70)
-                    print(f"Timestamp: {now_str} | Mode: {self.mode.upper()}\n")
-                    print("FUEL CELL STATUS:")
-                    print(self.format_fuelcell_table(fc, al))
-                    print("\nELECTROLYZER STATUS:")
-                    print(self.format_electrolyzer_table(ec_data))
-                    print("=" * 70)
-                    print_fc_user_options()
-
-                    time.sleep(1)
-
-                except KeyboardInterrupt:
-                    break
-            return
-
-        # CHARGE / IDLE
         while True:
             try:
-                start = time.time()
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                 data = self.read_electrolyzer_data()
                 fc = self.read_fuelcell_block()
                 al = self.read_alicat_data()
+                dryer_rows = self.read_dryer_states()
 
                 print("\n" + "=" * 70)
                 print(f"Timestamp: {now} | Mode: {self.mode.upper()}\n")
@@ -293,15 +303,20 @@ class L15System:
                 print(self.format_electrolyzer_table(data))
                 print("\nFUEL CELL STATUS:")
                 print(self.format_fuelcell_table(fc, al))
+                print("\nDRYER STATUS:")
+                print(self.format_dryer_table(dryer_rows))
                 print("=" * 70)
 
-                if time.time() - self.last_save >= SAVE_INTERVAL:
-                    utils.save_to_csv(
-                        f"system_{self.mode}_log.csv",
-                        [now] + list(data.values()),
-                        header=["timestamp"] + list(data.keys())
-                    )
-                    self.last_save = time.time()
+                # Dynamic hotkey help
+                if self.mode == "idle":
+                    print("Hotkeys: 'm' switch mode | 'q' quit")
+
+                elif self.mode == "charge":
+                    print("Hotkeys: 'r' set production rate | 'm' switch mode | 'q' quit")
+
+                elif self.mode == "discharge":
+                    print("Hotkeys: 'p' set FC power | 'o' FC ON | 'f' FC OFF | 'm' switch mode | 'q' quit")
+
 
                 if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
                     key = sys.stdin.read(1).strip().lower()
@@ -312,10 +327,50 @@ class L15System:
                         print("\nSwitching mode...")
                         self.prompt_mode_change()
                         return
+                    elif self.mode == "discharge" and self.fuelcell:
+                        if key == "p":
+                            try:
+                                target = float(input("Enter target power (0–10 kW): ").strip())
+                                if 0 <= target <= 10:
+                                    self.fuelcell.set_power(target)
+                                    print(f"[FC] Target power set to {target} kW.")
+                                else:
+                                    print("Invalid power value.")
+                            except ValueError:
+                                print("Invalid input.")
+                        elif key == "o":
+                            try:
+                                self.fuelcell.fuelcell_on(True)
+                                print("[FC] Fuel cell turned ON.")
+                            except Exception as e:
+                                print(f"[FC] ON error: {e}")
+                        elif key == "f":
+                            try:
+                                self.fuelcell.fuelcell_on(False)
+                                print("[FC] Fuel cell turned OFF.")
+                            except Exception as e:
+                                print(f"[FC] OFF error: {e}")
+                    elif self.mode == "charge":
+                        if key == "r":  # new hotkey to adjust electrolyzer production rate
+                            try:
+                                rate = float(input("Enter new target production rate (NL/h per stack): ").strip())
+                                if rate < 0:
+                                    print("Invalid rate.")
+                                else:
+                                    for ctrl in self.controllers.values():
+                                        try:
+                                            ctrl.write_target_production_rate(rate)
+                                        except AttributeError:
+                                            print(f"[WARN] Controller {ctrl} has no write_target_production_rate() method.")
+                                        except Exception as e:
+                                            print(f"[EL] Rate set error: {e}")
+                                    print(f"[EL] Target production rate set to {rate} NL/h for all electrolyzers.")
+                            except ValueError:
+                                print("Invalid input.")
 
-                time.sleep(max(0, 1 - (time.time() - start)))
-            except KeyboardInterrupt:
-                break
+                                time.sleep(1)
+                            except KeyboardInterrupt:
+                                break
 
     # -------------------------------------------------------------------
     def prompt_mode_change(self):
@@ -333,6 +388,10 @@ class L15System:
         print("\nSystem shutdown...")
         self.stop_electrolyzers()
         self.stop_fuelcell()
+        try:
+            self.stop_dryers()
+        except Exception:
+            pass
         if self.fuelcell:
             try:
                 self.fuelcell.close()
@@ -341,7 +400,6 @@ class L15System:
         print("System safely stopped.")
 
 
-# ==============================================================
 if __name__ == "__main__":
     system = L15System()
     try:
