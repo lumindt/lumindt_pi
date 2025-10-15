@@ -8,6 +8,7 @@ from enapter.enapter_modbus import ElectrolyzerModbusController
 from horizon_fc.FuelCellController import FuelCellController
 from horizon_fc.alicat import Controller as AlicatController
 import utils
+from sql_uploader import SQLUploader
 
 ENAPTER_HOSTS = [
     "10.1.10.53", "10.1.10.54", "10.1.10.55", "10.1.10.56",
@@ -45,6 +46,8 @@ class L15System:
         self.mode = "idle"
         self.controllers = {ip: ElectrolyzerModbusController(host=ip) for ip in ENAPTER_HOSTS}
         self.dryers = {ip: ElectrolyzerModbusController(host=ip) for ip in DRYER_HOSTS}
+        self.sql_uploader = SQLUploader()
+        self.test_id = input("Enter SQL test ID (e.g., test_001): ").strip() or "test_001"
 
         try:
             print("Initializing Alicat controller...")
@@ -312,6 +315,9 @@ class L15System:
                 print("\nDRYER STATUS:")
                 print(self.format_dryer_table(dryer_rows))
                 print("=" * 70)
+
+                if self.sql_uploader:
+                    self.sql_uploader.upload_row(data, fc, al, test_id=self.test_id)
 
                 # Hotkey hints
                 if self.mode == "idle":
