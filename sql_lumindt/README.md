@@ -1,16 +1,18 @@
 
 ````markdown
-## Lumindt SQL Data Upload Tool
-This tool allows Lumindt engineers to easily create PostgreSQL tables and insert test or measurement data into the shared Lumindt database server at **`10.1.10.12`**.
+# Lumindt SQL Data Upload Tool
 
+This tool allows Lumindt engineers to easily create PostgreSQL tables and insert test or measurement data into the shared Lumindt database server at `10.1.10.12`.
 
-## ⚙️ Setup Instructions
+---
 
-### 1️⃣ Connect to the Network
-- Ensure your computer is **connected to the Lumindt internal network via Ethernet**.  
+## Setup Instructions
+
+### 1. Connect to the Network
+- Ensure your computer is connected to the Lumindt internal network via Ethernet.  
 - This is required to reach the PostgreSQL server.
 
-### 2️⃣ Test Server Connection
+### 2. Test Server Connection
 Before proceeding, verify that your machine can reach the database server.
 
 **Windows (Command Prompt):**
@@ -24,7 +26,7 @@ ping 10.1.10.12
 ping -c 4 10.1.10.12
 ```
 
-✅ You should see replies like:
+You should see replies like:
 
 ```
 Reply from 10.1.10.12: bytes=32 time<1ms TTL=64
@@ -38,12 +40,13 @@ If the request times out, ensure:
 
 ---
 
-## 💾 Installation
+## Installation
 
 ### Requirements
 
 * Python 3.9 or higher
 * PostgreSQL client library (`psycopg2`)
+* Optional: DBeaver Community Edition (for viewing database tables)
 
 ### Step 1: Clone or Download This Repository
 
@@ -62,7 +65,7 @@ pip install psycopg2
 
 ---
 
-## 🧱 File Overview
+## File Overview
 
 | File                | Purpose                                                |
 | ------------------- | ------------------------------------------------------ |
@@ -74,12 +77,11 @@ pip install psycopg2
 
 ---
 
-## 🚀 Usage
+## Usage
 
-### 🏗️ Create a Table
+### 1. Create a Table
 
-1. Open **`schema.sql`** and define your table structure.
-   Example:
+1. Open `schema.sql` and define your table structure. Example:
 
    ```sql
    CREATE TABLE IF NOT EXISTS test_table (
@@ -99,7 +101,7 @@ pip install psycopg2
    python create.py
    ```
 
-✅ Output:
+Expected output:
 
 ```
 Table created or verified successfully from schema.sql
@@ -107,7 +109,7 @@ Table created or verified successfully from schema.sql
 
 ---
 
-### 📥 Insert Data (via Script)
+### 2. Insert Data from a Script
 
 Use the `insert_sql_row` module in your own Python script:
 
@@ -125,13 +127,13 @@ data = {
 insert_row(data, table_name="test_table")
 ```
 
-Then run:
+Then run your script:
 
 ```bash
 python your_script.py
 ```
 
-✅ Output:
+Expected output:
 
 ```
 Inserted row into 'test_table' (5 fields)
@@ -139,41 +141,63 @@ Inserted row into 'test_table' (5 fields)
 
 ---
 
-### 🧪 Example Quick Test
+### 3. Quick Test Example
 
-You can also use the included example file:
+You can also use the included example file to automatically insert random data:
 
 ```bash
 python example_insert.py
 ```
 
-This automatically generates random test data and uploads it to the database.
+This script generates random test data and uploads it to the database.
 
 ---
 
-## 🧠 Troubleshooting
+## Viewing Data in DBeaver
 
-| Problem                                                    | Cause                                             | Solution                                            |
-| ---------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------- |
-| `connection timed out`                                     | Network not connected to internal Lumindt network | Connect via Ethernet, verify ping to 10.1.10.12     |
-| `relation "test_table" does not exist`                     | Table not created yet                             | Run `python create.py` first                        |
-| `psycopg2.errors.UndefinedColumn`                          | Column name mismatch                              | Ensure your dict keys match table column names      |
-| `AttributeError: module 'psycopg2' has no attribute 'sql'` | Missing import                                    | Ensure `from psycopg2 import sql` is in your script |
+### 1. Install DBeaver
+
+* Download and install DBeaver Community Edition from the official website:
+  [https://dbeaver.io/download/](https://dbeaver.io/download/)
+
+### 2. Create a New Database Connection
+
+1. Open DBeaver.
+2. Click **Database → New Database Connection**.
+3. Select **PostgreSQL** and click **Next**.
+
+### 3. Enter Connection Details
+
+* **Host**: `10.1.10.12`
+* **Port**: `5432`
+* **Database**: `test_data`
+* **Username**: `postgres`
+* **Password**: `Lumindt2themoon`
+* Leave all other settings as default.
+
+Click **Test Connection** to verify connectivity.
+If successful, click **Finish**.
+
+### 4. View the Table
+
+1. In the **Database Navigator** pane (left sidebar), expand:
+
+   ```
+   PostgreSQL → test_data → Schemas → public → Tables
+   ```
+2. Find your table (for example, `test_table` or `L1_5_measurements`).
+3. Right-click the table and choose **View Data → All Rows**.
+4. You can now browse, sort, or export the table data directly in DBeaver.
 
 ---
 
-## 👩‍🔧 Support
+## Troubleshooting
 
-If you continue to have issues connecting or inserting data:
+| Problem                                                    | Cause                                             | Solution                                                           |
+| ---------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------ |
+| `connection timed out`                                     | Network not connected to internal Lumindt network | Connect via Ethernet and verify ping to 10.1.10.12                 |
+| `relation "test_table" does not exist`                     | Table not created yet                             | Run `python create.py` first                                       |
+| `psycopg2.errors.UndefinedColumn`                          | Column name mismatch                              | Ensure your dictionary keys match the table column names           |
+| `AttributeError: module 'psycopg2' has no attribute 'sql'` | Missing import                                    | Ensure you have `from psycopg2 import sql` in your script          |
+| DBeaver cannot connect                                     | Firewall, VPN, or wrong credentials               | Disable VPN, check credentials, and verify you can ping the server |
 
-* Confirm that you are on the Lumindt internal network
-* Contact the systems team for PostgreSQL server access verification
-* Or reach out to **@kyle** on Slack
-
-```
-
----
-
-✅ Just copy this entire block, paste it into a file named **`README.md`**, and you’re done.  
-It’s fully Markdown-formatted and ready for GitHub, GitLab, or internal documentation.
-```
