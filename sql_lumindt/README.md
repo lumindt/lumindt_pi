@@ -1,24 +1,25 @@
 
-````markdown
+
 # Lumindt SQL Data Upload Tool
 
 This tool allows Lumindt engineers to easily create PostgreSQL tables and insert test or measurement data into the shared Lumindt database server at `10.1.10.12`.
 
----
-
 ## Setup Instructions
 
 ### 1. Connect to the Network
-- Ensure your computer is connected to the Lumindt internal network via Ethernet.  
-- This is required to reach the PostgreSQL server.
+
+* Ensure your computer is connected to the Lumindt internal network via Ethernet.
+* This is required to reach the PostgreSQL server.
 
 ### 2. Test Server Connection
+
 Before proceeding, verify that your machine can reach the database server.
 
 **Windows (Command Prompt):**
+
 ```bash
 ping 10.1.10.12
-````
+```
 
 **Mac/Linux (Terminal):**
 
@@ -37,8 +38,6 @@ If the request times out, ensure:
 * You’re plugged into Ethernet
 * The network adapter is enabled
 * Firewall or VPN is not blocking internal traffic
-
----
 
 ## Installation
 
@@ -63,7 +62,6 @@ Or copy this folder from another machine.
 pip install psycopg2
 ```
 
----
 
 ## File Overview
 
@@ -75,7 +73,6 @@ pip install psycopg2
 | `example_insert.py` | Demonstrates how to import and use the insert function |
 | `README.md`         | This documentation file                                |
 
----
 
 ## Usage
 
@@ -107,7 +104,6 @@ Expected output:
 Table created or verified successfully from schema.sql
 ```
 
----
 
 ### 2. Insert Data from a Script
 
@@ -139,8 +135,6 @@ Expected output:
 Inserted row into 'test_table' (5 fields)
 ```
 
----
-
 ### 3. Quick Test Example
 
 You can also use the included example file to automatically insert random data:
@@ -151,14 +145,13 @@ python example_insert.py
 
 This script generates random test data and uploads it to the database.
 
----
 
 ## Viewing Data in DBeaver
 
 ### 1. Install DBeaver
 
-* Download and install DBeaver Community Edition from the official website:
-  [https://dbeaver.io/download/](https://dbeaver.io/download/)
+Download and install DBeaver Community Edition from the official website:
+[https://dbeaver.io/download/](https://dbeaver.io/download/)
 
 ### 2. Create a New Database Connection
 
@@ -200,4 +193,7 @@ If successful, click **Finish**.
 | `psycopg2.errors.UndefinedColumn`                          | Column name mismatch                              | Ensure your dictionary keys match the table column names           |
 | `AttributeError: module 'psycopg2' has no attribute 'sql'` | Missing import                                    | Ensure you have `from psycopg2 import sql` in your script          |
 | DBeaver cannot connect                                     | Firewall, VPN, or wrong credentials               | Disable VPN, check credentials, and verify you can ping the server |
+
+---
+
 
