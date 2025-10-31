@@ -13,7 +13,7 @@ class FuelCellController:
 
         self.bus = can.interface.Bus(channel='can0', interface='socketcan')  # Set up the CAN bus for FC
 
-        self.db = cantools.database.load_file('horizon_fc/FCU.dbc')
+        self.db = cantools.database.load_file('FCU.dbc')
         self.debug = debug
         self.name = 'VCU_1'
         self.template = self.db.get_message_by_name(self.name)
@@ -32,23 +32,13 @@ class FuelCellController:
         self.FC03 = {}
         self.FC04 = {}
         self.FC05 = {}
-        self.FC10 = {}
-        self.FC11 = {}
-        self.FC12 = {}
 
         # Start the background thread to update the dictionaries
         self.running = True
-        self.update_fast = threading.Thread(target=self._update_fast)
+        self.update_thread = threading.Thread(target=self._update_dictionaries)
         #make daemon
-        self.update_fast.daemon = True
-        self.fast_lock = threading.Lock()
-        self.update_fast.start()
-        # Start a second thread for slower messages
-        self.update_slow = threading.Thread(target=self._update_slow)
-        #make daemon
-        self.update_slow.daemon = True
-        self.slow_lock = threading.Lock()
-        self.update_slow.start()
+        self.update_thread.daemon = True
+        self.update_thread.start()
 
     def _modify(self, signal, value):
         self.data[signal] = value
@@ -69,8 +59,8 @@ class FuelCellController:
             print('No Message')
         return msg
 
-    def fast_read(self, name, target_dict):
-        msg = self._LIFO(name,time_window=0.1)
+    def read(self, name, target_dict):
+        msg = self._LIFO(name)
         if msg:
             decoded_data = self.db.decode_message(msg.arbitration_id, msg.data)
             if self.debug:
@@ -79,39 +69,14 @@ class FuelCellController:
             return decoded_data
         return None
 
-    def _update_fast(self):
+    def _update_dictionaries(self):
         while self.running:
             try:
-                with self.fast_lock:
-                    self.fast_read('FCU_01', self.FC01)
-                    self.fast_read('FCU_02', self.FC02)
-                    self.fast_read('FCU_03', self.FC03)
-                    self.fast_read('FCU_04', self.FC04)
-                    self.fast_read('FCU_05', self.FC05)
-                time.sleep(0.1)
-                
-            except Exception as e:
-                print(f"Error in update thread: {e}")
-                self.close()
-                break
-
-    def slow_read(self, name, target_dict):
-        msg = self._LIFO(name,time_window=5.0)
-        if msg:
-            decoded_data = self.db.decode_message(msg.arbitration_id, msg.data)
-            if self.debug:
-                print(f'{hex(msg.arbitration_id)}\t{decoded_data}')
-            target_dict.update(decoded_data)
-            return decoded_data
-        return None
-
-    def _update_slow(self):
-        while self.running:
-            try:
-                with self.slow_lock:
-                    self.slow_read('FCU_10', self.FC10)
-                    # self.slow_read('FCU_11', self.FC11)
-                    # self.slow_read('FCU_12', self.FC12)
+                self.read('FCU_01', self.FC01)
+                self.read('FCU_02', self.FC02)
+                self.read('FCU_03', self.FC03)
+                self.read('FCU_04', self.FC04)
+                self.read('FCU_05', self.FC05)
                 time.sleep(0.1)
                 
             except Exception as e:
@@ -132,35 +97,31 @@ class FuelCellController:
 
     def get_system_output_power(self):
         key = 'FCU1_SystemOutputPower'
-        with self.fast_lock: return self.FC01[key] if key in self.FC01 else None
+        return self.FC01[key] if key in self.FC01 else None
     
     def get_system_output_voltage(self):
         key = 'FCU2_SystemOutputVoltage'
-        with self.fast_lock: return self.FC02[key] if key in self.FC02 else None
+        return self.FC02[key] if key in self.FC02 else None
 
     #get phase
     def get_phase(self):
         key = 'FCU1_Phase'
         #get phase number and then get the phase name from the dictionary
-        with self.fast_lock: return config.PHASE_DICTIONARY[self.FC01[key]] if key in self.FC01 else None
+        return config.PHASE_DICTIONARY[self.FC01[key]] if key in self.FC01 else None
     
     #get fault codes
     def get_fault_codes(self):
         key = 'FCU1_FaultCode'
-        with self.fast_lock: return self.FC01[key] if key in self.FC01 else None
+        return self.FC01[key] if key in self.FC01 else None
 
     #get FCU2_FC_Power
     def get_fc_power(self):
         key = 'FCU2_FC_Power'
-        with self.fast_lock: return self.FC02[key] if key in self.FC02 else None
+        return self.FC02[key] if key in self.FC02 else None
     
     def get_system_power(self):
         key = 'FCU1_SystemOutputPower'
-        with self.fast_lock: return self.FC01[key] if key in self.FC01 else None
-    
-    def get_H2_consumption(self):
-        key = 'FCU10_H2_Consume_Kg'
-        with self.slow_lock: return self.FC10[key] if key in self.FC10 else None
+        return self.FC01[key] if key in self.FC01 else None
     
     def close(self):
         self.running = False

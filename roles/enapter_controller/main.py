@@ -1,0 +1,231 @@
+import sys
+import select
+import time
+import csv
+from datetime import datetime
+from math import isnan
+from enapter_modbus import ElectrolyzerModbusController
+
+# =====================================================================================
+ENAPTER_HOSTS = [
+    "10.1.10.33", "10.1.10.34", "10.1.10.35", "10.1.10.36",
+    "10.1.10.44", "10.1.10.45", "10.1.10.46", "10.1.10.47"
+]
+
+# pick two controllers to represent the two dryers
+DRYER_HOSTS = ["10.1.10.33", "10.1.10.44"]
+
+DRYER_STATES = {
+    257: 'WAITING FOR POWER', 263: 'WAITING FOR PRESSURE',
+    259: 'STOPPED BY USER', 260: 'STARTING',
+    262: 'STANDBY', 265: 'IDLE',
+    513: 'DRYING', 514: 'COOLING', 515: 'SWITCHING',
+    516: 'PRESSURIZING', 517: 'FINALIZING',
+    1281: 'ERROR', 1537: 'BYPASS', 2305: 'MAINTENANCE'
+}
+
+# =====================================================================================
+def safe_read(func, fallback=float("nan")):
+    """Helper: safely call Modbus functions, return fallback if None or error."""
+    try:
+        val = func()
+        if val is None:
+            return fallback
+        return val
+    except Exception:
+        return fallback
+
+# =====================================================================================
+def run_enapters():
+    controllers = {ip: ElectrolyzerModbusController(host=ip) for ip in ENAPTER_HOSTS}
+    dryers = {ip: ElectrolyzerModbusController(host=ip) for ip in DRYER_HOSTS}
+
+    # Ask for production rate and apply to all
+    rate = float(input("Enter initial production rate (60–100%): "))
+    for ctrl in controllers.values():
+        ctrl.write_production_rate(rate)
+        ctrl.write_stop_electrolyser()
+    for d in dryers.values():
+        d.write_stop_dryer()
+
+    last_action = "System initialized (all OFF, dryers OFF)"
+
+    # record initial cumulative H2 totals
+    initial_totals = {}
+    for ip, ctrl in controllers.items():
+        initial_totals[ip] = safe_read(ctrl.display_stack_total_H2_production, fallback=0.0)
+
+    # open CSV
+    filename = f"enapter_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    csvfile = open(filename, mode="w", newline="")
+    writer = csv.writer(csvfile)
+
+    # CSV header
+    writer.writerow([
+        "Time", "Electrolyzer", "IP", "Status", "State", "Rate (%)", "Temp (°C)",
+        "Voltage (V)", "Current (A)", "Power (kW)", "Flow (NL/h)", "H2 Produced (NL)"
+    ])
+    csvfile.flush()
+
+    while True:
+        curr_time = datetime.now()
+        rows = []
+        total_flow = 0.0
+        total_h2 = 0.0
+
+        # Electrolyzers
+        for idx, (ip, ctrl) in enumerate(controllers.items(), start=1):
+            try:
+                stack_voltage = safe_read(ctrl.display_stack_voltage)
+                stack_current = safe_read(ctrl.display_stack_current)
+                stack_power = (stack_voltage * stack_current) / 1000.0 if not isnan(stack_voltage) and not isnan(stack_current) else float("nan")
+                electrolyzer_on = safe_read(ctrl.display_start_stop_electrolyser, fallback=False)
+                production_rate = safe_read(ctrl.display_production_rate)
+                electrolyte_temp = safe_read(ctrl.display_electrolyte_temperature)
+                stack_flow_rate = safe_read(ctrl.display_stack_H2_flow_rate)
+                state = safe_read(ctrl.display_electrolyser_state, fallback="Unknown")
+                h2_total_now = safe_read(ctrl.display_stack_total_H2_production, fallback=0.0)
+
+                # since-script total
+                h2_total_session = h2_total_now - initial_totals.get(ip, 0.0)
+
+                if not isnan(stack_flow_rate):
+                    total_flow += stack_flow_rate
+                if not isnan(h2_total_session):
+                    total_h2 += h2_total_session
+
+                rows.append([
+                    f"E{idx}", "ON " if electrolyzer_on else "OFF", state,
+                    f"{production_rate:5.1f}%" if not isnan(production_rate) else "-",
+                    f"{electrolyte_temp:5.1f}°C" if not isnan(electrolyte_temp) else "-",
+                    f"{stack_voltage:6.1f}V" if not isnan(stack_voltage) else "-",
+                    f"{stack_current:6.1f}A" if not isnan(stack_current) else "-",
+                    f"{stack_power:6.2f}kW" if not isnan(stack_power) else "-",
+                    f"{stack_flow_rate:6.1f}NL/h" if not isnan(stack_flow_rate) else "-",
+                    f"{h2_total_session:.1f} NL"
+                ])
+
+                # log per-electrolyzer row
+                writer.writerow([
+                    curr_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    f"E{idx}", ip,
+                    "ON" if electrolyzer_on else "OFF",
+                    state,
+                    f"{production_rate:.1f}" if not isnan(production_rate) else "",
+                    f"{electrolyte_temp:.1f}" if not isnan(electrolyte_temp) else "",
+                    f"{stack_voltage:.1f}" if not isnan(stack_voltage) else "",
+                    f"{stack_current:.1f}" if not isnan(stack_current) else "",
+                    f"{stack_power:.2f}" if not isnan(stack_power) else "",
+                    f"{stack_flow_rate:.1f}" if not isnan(stack_flow_rate) else "",
+                    f"{h2_total_session:.1f}"
+                ])
+            except Exception as e:
+                rows.append([f"E{idx}", "ERROR", "-", "-", "-", "-", "-", "-", "-", str(e)])
+
+        # after all electrolyzers, log TOTAL row
+        writer.writerow([
+            curr_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "TOTAL", "-", "-", "-", "-", "-", "-", "-",
+            f"{total_flow:.1f}",
+            f"{total_h2:.1f} NL"
+        ])
+        csvfile.flush()
+
+        # Dryer states
+        dryer_statuses = []
+        for i, (ip, d) in enumerate(dryers.items(), start=1):
+            try:
+                code = safe_read(d.display_dryer_state, fallback=None)
+                if code is None or isnan(code):
+                    state = "Unavailable"
+                else:
+                    state = DRYER_STATES.get(code, f"Unknown ({code})")
+                dryer_statuses.append(f"Dryer {i} ({ip}) State: {state}")
+            except Exception as e:
+                dryer_statuses.append(f"Dryer {i} ({ip}): Error {e}")
+
+        # Clear screen
+        print("\033c", end="")
+        print(f"=== Enapter System Status @ {curr_time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+
+        header = f"{'Unit':<6} {'IP':<14} {'Status':<6} {'State':<15} {'Rate':<7} {'Temp':<8} {'Voltage':<8} {'Current':<8} {'Power':<8} {'Flow':<10} {'H2 (NL)':<10}"
+        print(header)
+        print("-" * len(header))
+
+        for (row, (ip, _)) in zip(rows, controllers.items()):
+            print(f"{row[0]:<6} {ip:<14} {row[1]:<6} {row[2]:<15} {row[3]:<7} {row[4]:<8} {row[5]:<8} {row[6]:<8} {row[7]:<8} {row[8]:<10} {row[9]:<10}")
+
+        print("-" * len(header))
+
+
+        # print out error code(s) for each electrolyzer
+        for i, (ip, ctrl) in enumerate(controllers.items(), start=1):
+            try:
+                error_codes = ctrl.display_error_codes()
+                if isinstance(error_codes, list) and len(error_codes) > 0:
+                    print(f"E{i} ({ip}) Error Codes: {error_codes}")
+                elif isinstance(error_codes, str):
+                    print(f"E{i} ({ip}) Error Codes: {error_codes}")  # e.g., "Failed to read error codes."
+                else:
+                    print(f"E{i} ({ip}) Error Codes: None")
+            except Exception as e:
+                print(f"E{i} ({ip}) Error Codes: Error reading ({e})")
+
+        # print out error code(s) for dryers
+        for i, (ip, d) in enumerate(dryers.items(), start=1):
+            try:
+                error_codes = d.display_error_codes()
+                if isinstance(error_codes, list) and len(error_codes) > 0:
+                    print(f"Dryer {i} ({ip}) Error Codes: {error_codes}")
+                elif isinstance(error_codes, str):
+                    print(f"Dryer {i} ({ip}) Error Codes: {error_codes}")
+                else:
+                    print(f"Dryer {i} ({ip}) Error Codes: None")
+            except Exception as e:
+                print(f"Dryer {i} ({ip}) Error Codes: Error reading ({e})")
+
+        print(f"TOTAL H2 Flow Rate: {total_flow:.1f} NL/h")
+        print(f"TOTAL H2 Produced (since start): {total_h2:.1f} NL\n")
+
+        for line in dryer_statuses:
+            print(line)
+        print("Controls: [s]=Start ALL, [x]=Stop ALL, [d]=Start Dryers, [f]=Stop Dryers, [r]=Change Prod Rate, [q]=Quit")
+        print(f"Last Action: {last_action}")
+
+        # Keyboard input
+        dr, _, _ = select.select([sys.stdin], [], [], 1)
+        if dr:
+            key = sys.stdin.read(1)
+            if key == "s":
+                print("Processing: Starting all electrolyzers...")
+                for ctrl in controllers.values(): ctrl.write_start_electrolyser()
+                last_action = "Started ALL electrolyzers"
+            elif key == "x":
+                print("Processing: Stopping all electrolyzers...")
+                for ctrl in controllers.values(): ctrl.write_stop_electrolyser()
+                last_action = "Stopped ALL electrolyzers"
+            elif key == "d":
+                print("Processing: Starting both dryers...")
+                for d in dryers.values(): d.write_start_dryer()
+                last_action = "Started BOTH dryers"
+            elif key == "f":
+                print("Processing: Stopping both dryers...")
+                for d in dryers.values(): d.write_stop_dryer()
+                last_action = "Stopped BOTH dryers"
+            elif key == "r":
+                print("\nChange Production Rate:")
+                try:
+                    new_rate = float(input("Enter new production rate (60–100%): "))
+                    for ctrl in controllers.values():
+                        ctrl.write_production_rate(new_rate)
+                    last_action = f"Changed production rate to {new_rate:.1f}%"
+                except Exception as e:
+                    last_action = f"Error changing rate: {e}"
+            elif key == "q":
+                print("Exiting...")
+                csvfile.close()
+                return
+
+# =====================================================================================
+if __name__ == "__main__":
+    run_enapters()

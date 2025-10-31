@@ -32,12 +32,9 @@ class Controller:
 
     def _send_command(self, command):
         full_command = f'{self.address}{command}\r'.encode('utf-8')
-        # self.ser.reset_input_buffer()
-        # time.sleep(0.05)
         self.ser.write(full_command)
         time.sleep(0.1)
         resp=self.ser.read_until(b'\r').decode('utf-8').strip().split()
-        # self.ser.reset_output_buffer()
         return resp
 
     ### POLLING ###
@@ -46,14 +43,14 @@ class Controller:
         '''Poll flow, pressure, and temperature.'''
         data=self._send_command('')
         data_dict={
-            'P':float(data[1]), # Downstream pressure (barA)
-            'T':float(data[2]), # Gas temperature (C)
-            'V':float(data[3]), # Volumetric flow (SLPM)
-            'M':float(data[4]), # Mass flow (g/s)
-            'G':data[5],
+            'P':float(data[0]), # Downstream pressure (barA)
+            'T':float(data[1]), # Gas temperature (C)
+            'V':float(data[2]), # Volumetric flow (SLPM)
+            'M':float(data[3]), # Mass flow (g/s)
+            'G':data[4],
             'E':[]
         }
-        for code in data[6:]:
+        for code in data[8:]:
             data_dict['E'].append(code)
         return data_dict
 
@@ -117,8 +114,8 @@ class Controller:
 if __name__=='__main__':
 
     FC=Controller()
-    # FC.totalizer_reset()
-    # print(FC._send_command('TC 1'))
+    FC.totalizer_reset()
+    print(FC._send_command('TC 1'))
 
     t_start=time.time()
     while True:
@@ -127,11 +124,8 @@ if __name__=='__main__':
             t_now=time.time()
             print(f'{t_now-t_start:.2f}')
             print(FC.poll())
-            # print(FC._send_command(''))
-            input('')
-            # while time.time()-t_now<1:
-            #     pass
-        except Exception as e:
-            print(f'Error: {e}')
+            while time.time()-t_now<1:
+                pass
+        except:
             FC.close()
             break

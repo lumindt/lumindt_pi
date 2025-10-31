@@ -139,6 +139,10 @@ class LTC2983:
         num = int.from_bytes(out[1:], 'big', signed=True)/(2**21)
         pt_reading=(num/165-0.004)*(68.95/0.016)
         return pt_reading
+    
+    def close(self):
+        self.cs.off()
+        self.cs.close()
 
 if __name__ == "__main__":
     spi = busio.SPI(board.SCK, board.MOSI, board.MISO)

@@ -8,14 +8,24 @@ from tabulate import tabulate
 from enapter.enapter_modbus import ElectrolyzerModbusController
 from horizon_fc.FuelCellController import FuelCellController
 from horizon_fc.alicat import Controller as AlicatController
-import utils
+from utilities.sensors_v2 import LTC2983
+import busio
+import board
+import gpiozero
+# import utils
 import config
 from sql_uploader import SQLUploader
 
 # Starting IP then add 1 for each additional unit
-starting_ip = 64
+starting_ip = 104
 ENAPTER_HOSTS = [f"10.1.10.{starting_ip + i}" for i in range(8)]  # E64–E71
 DRYER_HOSTS = [f"10.1.10.{starting_ip}", f"10.1.10.{starting_ip + 4}"]
+
+
+# HES_in=gpiozero.OutputDevice(pin=17)
+# HES_out=gpiozero.OutputDevice(pin=27)
+# C5_in=gpiozero.OutputDevice(pin=22)
+# C5_out=gpiozero.OutputDevice(pin=23)
 
 def safe_read(func, fallback=float("nan")):
     try:
@@ -31,7 +41,27 @@ def safe_float(val, default=0.0):
         return default
 
 class L15System:
-    def __init__(self):
+    def __init__(self,vessel=1):
+        ###################### Vessel Logic ################################
+        # Vessel 1: HES06
+        # Vessel 2: C5
+        self.vessel=vessel
+        if self.vessel not in [1, 2]:
+            raise ValueError("Vessel must be 1 or 2.")
+        if self.vessel == 1:
+            self.vessel_in = gpiozero.OutputDevice(pin=17) #HES06 in
+            self.vessel_out = gpiozero.OutputDevice(pin=27) #HES06 out
+        else:
+            self.vessel_in = gpiozero.OutputDevice(pin=22) #C5 in
+            self.vessel_out = gpiozero.OutputDevice(pin=23) #C5 out
+        self.vessel_in.off()
+        self.vessel_out.off()
+        ####################################################################
+        ###################### Sensor Logic ################################
+        spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
+        self.LTC=LTC2983(spi)
+        ####################################################################
+
         self.mode = "idle"
         self.controllers = {ip: ElectrolyzerModbusController(host=ip) for ip in ENAPTER_HOSTS}
         self.dryers = {ip: ElectrolyzerModbusController(host=ip) for ip in DRYER_HOSTS}
@@ -78,11 +108,17 @@ class L15System:
             self.fuelcell.fuelcell_on(False) if self.fuelcell else None
             self.start_dryers()
             self.start_electrolyzers()
+            self.vessel_out.off()
+            time.sleep(0.5)
+            self.vessel_in.on()
             print("[MODE] System is now in CHARGE mode.")
 
         elif mode == "discharge":
             self.stop_electrolyzers()
             self.stop_dryers()
+            self.vessel_in.off()
+            time.sleep(0.5)
+            self.vessel_out.on()
             if self.fuelcell:
                 try:
                     target_power = None
@@ -109,6 +145,8 @@ class L15System:
         elif mode == "idle":
             self.stop_electrolyzers()
             self.stop_dryers()
+            self.vessel_out.off()
+            self.vessel_in.off()
             self.fuelcell.fuelcell_on(False) if self.fuelcell else None
             print("[MODE] System is now in IDLE mode.")
 
@@ -195,6 +233,8 @@ class L15System:
             prod_rate = safe_read(ctrl.display_production_rate)
             temp = safe_read(ctrl.display_electrolyte_temperature)
             state = safe_read(ctrl.display_electrolyser_state, "Unknown")
+            warning = safe_read(ctrl.display_warning_codes, ['None'])
+            error = safe_read(ctrl.display_error_codes, ['None'])
 
             if not isnan(flow):
                 total_flow += flow
@@ -209,6 +249,8 @@ class L15System:
             data[f"E{idx}_flow_NLh"] = flow
             data[f"E{idx}_prod_rate_pct"] = prod_rate
             data[f"E{idx}_temp_C"] = temp
+            data[f"E{idx}_warning_codes"] = warning
+            data[f"E{idx}_error_codes"] = error
 
         data["total_flow_NLh"] = total_flow
         data["total_power_kW"] = total_power
@@ -223,19 +265,43 @@ class L15System:
         fc_target_voltage = safe_float(self.fuelcell.get_target_voltage())
         fc_phase = self.fuelcell.get_phase() or "N/A"
         fc_faults = self.fuelcell.get_fault_codes() or []
+        fc_consumption = safe_float(self.fuelcell.get_H2_consumption())
         return dict(fc_power_kW=fc_power, fc_voltage_V=fc_voltage,
                     fc_target_power_kW=fc_target_power, fc_target_voltage_V=fc_target_voltage,
-                    fc_phase=fc_phase, fc_faults=fc_faults)
+                    fc_phase=fc_phase, fc_faults=fc_faults, fc_consumption_kg=fc_consumption)
 
-    def read_alicat_data(self):
+    def read_storage_data(self):
+        outputs = {}
         if not self.alicat_ready or not self.alicat:
-            return {"mass_flow_gps": -1.0, "volumetric_flow_slpm": -1.0}
+            outputs.update({"mass_flow_gps": -1.0, "volumetric_flow_slpm": -1.0})
         try:
             data = self.alicat.poll()
-            return {"mass_flow_gps": data.get("M", -1.0), "volumetric_flow_slpm": data.get("V", -1.0)}
+            print(data)
+            outputs.update({"mass_flow_gps": data.get("M", -1.0), "volumetric_flow_slpm": data.get("V", -1.0)})
         except Exception as e:
             print(f"[WARN] Alicat read failed: {e}")
-            return {"mass_flow_gps": -1.0, "volumetric_flow_slpm": -1.0}
+            outputs.update({"mass_flow_gps": -2.0, "volumetric_flow_slpm": -2.0})
+        try:
+            outputs.update({
+                "V1P": self.LTC.pres(11),
+                "V2P": self.LTC.pres(13),
+                "FCP": self.LTC.pres(12),
+                "ELP": self.LTC.pres(14),
+                "V1T1": self.LTC.temp(2),
+                "V1T2": self.LTC.temp(4),
+            })
+        except Exception as e:
+            print(f"[WARN] Pressure/Temp read failed: {e}")
+            outputs.update({
+                "V1P": 0.0,
+                "V2P": 0.0,
+                "FCP": 0.0,
+                "ELP": 0.0,
+                "V1T1": 0.0,
+                "V1T2": 0.0,
+            })
+
+        return outputs
 
     def format_electrolyzer_table(self, data):
         rows = []
@@ -250,27 +316,42 @@ class L15System:
                     round(data.get(f"{prefix}flow_NLh", 0), 1),
                     round(data.get(f"{prefix}prod_rate_pct", 0), 1),
                     round(data.get(f"{prefix}temp_C", 0), 1),
+                    data.get(f"{prefix}warning_codes", [""]),
+                    data.get(f"{prefix}error_codes", [""])
                 ])
         rows.append(["", "—", "TOTAL", "", "", round(data.get("total_power_kW", 0), 3),
                      round(data.get("total_flow_NLh", 0), 1), ""])
         headers = ["#", "IP", "State", "V (V)", "I (A)", "P (kW)",
-                   "Flow (NL/h)", "Prod Rate (%)", "Temp (°C)"]
+                   "Flow (NL/h)", "Prod Rate (%)", "Temp (°C)", "Warnings", "Errors"]
         return tabulate(rows, headers=headers, tablefmt="fancy_grid")
 
     def run_loop(self):
         print(f"Running system in {self.mode.upper()} mode. (Press Ctrl+C to exit)")
 
-        latest = {"el": {}, "fc": {}, "al": {}, "dryer": []}
+        latest = {"el": {}, "fc": {}, "st": {}, "dy": []}
+        debug_thread = {"el_time": {}, "fc_time": {}, "st_time": {}, "dy_time": {}, "counter": {}}
         stop_flag = threading.Event()
 
         def data_updater():
+            count=0
             while not stop_flag.is_set():
                 try:
-                    el = self.read_electrolyzer_data()
+                    ttt=time.time()
+                    #el = self.read_electrolyzer_data()
+                    el = {} # Disable electrolyzer reads because read time was over 2 minutes (>145s)
+                    # UPDATE: Only slow if IP addresses is wrong
+                    debug_thread['el_time']=round(time.time()-ttt,6)
                     fc = self.read_fuelcell_block()
-                    al = self.read_alicat_data()
-                    dryers = self.read_dryer_states()
-                    latest.update({"el": el, "fc": fc, "al": al, "dryer": dryers})
+                    # fc = {} # Not an issue but could be slow
+                    debug_thread['fc_time']=round(time.time()-ttt,6)
+                    st = self.read_storage_data()
+                    debug_thread['st_time']=round(time.time()-ttt,6)
+                    dy = self.read_dryer_states()
+                    # dryers = [] # See Above
+                    debug_thread['dy_time']=round(time.time()-ttt,6)
+                    latest.update({"el": el, "fc": fc, "st": st, "dy": dy})
+                    debug_thread['counter']=count
+                    count+=1
                 except Exception as e:
                     print(f"[DATA_THREAD] {e}")
                 time.sleep(1.5)
@@ -286,14 +367,19 @@ class L15System:
                 data_snapshot = latest.copy()
                 el = data_snapshot.get("el", {})
                 fc = data_snapshot.get("fc", {})
-                al = data_snapshot.get("al", {})
-                dryers = data_snapshot.get("dryer", [])
-
+                st = data_snapshot.get("st", {})
+                dy = data_snapshot.get("dy", [])
+                debug_copy = debug_thread.copy()
 
                 print("\n" + "=" * 70)
                 print("\n" + "=" * 70)
-                print(f"Timestamp: {now} | Mode: {self.mode.upper()}\n")
+                print(f"Timestamp: {now} | Mode: {self.mode.upper()} | Vessel Number: {self.vessel}\n")
+                print(f"Timing: EL - {debug_copy['el_time']}s | FC - {debug_copy['fc_time']}s | ST - {debug_copy['st_time']}s | DY - {debug_copy['dy_time']}s | Cycles - {debug_copy['counter']}\n")
 
+                print(f"Valves: In - {bool(self.vessel_in.value)} | Out - {bool(self.vessel_out.value)}")
+                print(f"Temps: T1 - {st.get('V1T1',0):>6.2f} C | T2 - {st.get('V1T2',0):>6.2f} C\n")
+                print(f"Pressures: V1 - {st.get('V1P',0):>6.2f} barG | V2 - {st.get('V2P',0):>6.2f} barG | FC - {st.get('FCP',0):>6.2f} barG | EL - {st.get('ELP',0):>6.2f} barG\n")
+                
                 print("ELECTROLYZER STATUS:")
                 print(self.format_electrolyzer_table(el))
 
@@ -305,16 +391,17 @@ class L15System:
                         round(fc.get("fc_power_kW", 0), 2),
                         round(fc.get("fc_target_voltage_V", 0), 2),
                         round(fc.get("fc_target_power_kW", 0), 2),
-                        round(al.get("mass_flow_gps", 0), 2),
-                        round(al.get("volumetric_flow_slpm", 0), 2)
+                        round(st.get("mass_flow_gps", 0), 2),
+                        round(st.get("volumetric_flow_slpm", 0), 2),
+                        round(fc.get("fc_consumption_kg", 0), 6)
                     ]],
                     headers=["Phase", "Voltage (V)", "Power (kW)", "Target Voltage (V)", "Target Power (kW)",
-                             "Mass Flow (g/s)", "Vol Flow (SLPM)"],
+                             "Mass Flow (g/s)", "Vol Flow (SLPM)", "H2 Consumption (kg)"],
                     tablefmt="fancy_grid"
                 ))
 
                 print("\nDRYER STATUS:")
-                print(self.format_dryer_table(dryers))
+                print(self.format_dryer_table(dy))
 
                  # Upload to SQL directly (synchronous, easier to debug)
                 # --- Upload to SQL every N seconds ---
@@ -322,7 +409,7 @@ class L15System:
                     if time.time() - self._last_sql_upload >= self.sql_upload_interval:
                         try:
                             print(f"[SQL] Uploading data at {now} ...", end=" ")
-                            self.sql_uploader.upload_row(el, fc, al, self.test_id)
+                            self.sql_uploader.upload_row(el, fc, st, self.test_id)
                             print("✅ Done.")
                             self._last_sql_upload = time.time()
                         except Exception as e:
@@ -416,6 +503,17 @@ class L15System:
         print("\nSystem shutdown...")
         self.stop_electrolyzers()
         self.stop_dryers()
+        self.alicat.close() if self.alicat else None
+        try:
+            self.vessel_out.off()
+            self.vessel_out.close()
+        except:
+            print("Valve already closed.")
+        try:
+            self.vessel_in.off()
+            self.vessel_in.close()
+        except:
+            print("Valve already closed.")
         self.fuelcell.fuelcell_on(False) if self.fuelcell else None
         print("System safely stopped.")
 
@@ -430,4 +528,3 @@ if __name__ == "__main__":
         system.set_mode("charge" if choice == "1" else "discharge" if choice == "2" else "idle")
         system.run_loop()
     except KeyboardInterrupt: print("\n[CTRL+C] Exiting...")
-    finally: system.shutdown()

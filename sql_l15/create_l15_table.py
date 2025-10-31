@@ -4,7 +4,7 @@ conn = psycopg2.connect(dbname="test_data", user="postgres", password="Lumindt2t
 conn.autocommit = True
 cur = conn.cursor()
 
-table_name = "MasonsTest"
+table_name = "L1_5_measurements"
 cur.execute(f"DROP TABLE IF EXISTS {table_name};") # Drop if exists for clean slate
 
 cur.execute(f"""

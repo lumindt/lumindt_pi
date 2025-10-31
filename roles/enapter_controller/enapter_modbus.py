@@ -188,32 +188,28 @@ class ElectrolyzerModbusController:
         return ut.decode_ieee(ut.word_list_to_long(reg)[0])
 
     def display_warning_codes(self):
-        # reg = self.electrolyzer.read_input_registers(768, 1)
-        # if reg:
-        #     warnings = [reg[0]]
-        #     for i in range(warnings[0]):
-        #         sreg = self.electrolyzer.read_input_registers(769 + i, 1)
-        #         if sreg:
-        #             warnings.append(sreg[0])
-        #     return warnings
-        reg = self.electrolyzer.read_input_registers(768, 31)
+        reg = self.electrolyzer.read_input_registers(768, 1)
         if reg:
-            return [hex(i) for i in reg[1:reg[0]+1]]
+            num_warnings = reg[0]
+            warning_codes = []
+            for i in range(num_warnings):
+                reg = self.electrolyzer.read_input_registers(769 + i, 1)
+                if reg:
+                    warning_codes.append(reg[0])
+            return warning_codes
         else:
             return "Failed to read warning codes."
 
     def display_error_codes(self):
-        # reg = self.electrolyzer.read_input_registers(832, 1)
-        # if reg:
-        #     errors = [reg[0]]
-        #     for i in range(errors[0]):
-        #         sreg = self.electrolyzer.read_input_registers(833 + i, 1)
-        #         if sreg:
-        #             errors.append(sreg[0])
-        #     return errors
-        reg = self.electrolyzer.read_input_registers(832, 31)
+        reg = self.electrolyzer.read_input_registers(832, 1)
         if reg:
-            return [hex(i) for i in reg[1:reg[0]+1]]
+            num_errors = reg[0]
+            error_codes = []
+            for i in range(num_errors):
+                reg = self.electrolyzer.read_input_registers(833 + i, 1)
+                if reg:
+                    error_codes.append(reg[0])
+            return error_codes
         else:
             return "Failed to read error codes."
 
@@ -357,18 +353,4 @@ if __name__ == "__main__":
             print(f"Dryer State: {dryer_state}")
             print("=" * 30)
 
-            # writer.writerow([
-            #     curr_time.strftime('%Y-%m-%d %H:%M:%S'), 
-            #     "ON" if electrolyzer_ison else "OFF", 
-            #     "ON" if preheat_status else "OFF", 
-            #     production_rate, 
-            #     electrolyte_temp, 
-            #     stack_voltage, 
-            #     stack_current, 
-            #     stack_power,
-            #     stack_flow_rate
-            # ])
-
-            # file.flush()
-            # i += 1
-            # time.sleep(1)  # Add a delay to avoid spamming the log file
+            
