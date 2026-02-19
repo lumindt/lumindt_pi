@@ -6,7 +6,7 @@ from datetime import datetime
 
 class SQLUploader:
     def __init__(self, dbname="test_data", user="postgres", password="Lumindt2themoon",
-                 host="10.1.10.12", port="5432", test_id=None, table_name="L1_5_measurements"):
+                 host="192.168.1.83", port="5432", test_id=None, table_name="L1_5_measurements"):
         self.dbname = dbname
         self.user = user
         self.password = password

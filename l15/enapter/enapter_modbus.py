@@ -7,7 +7,12 @@ import csv
 class ElectrolyzerModbusController:
     def __init__(self, host):
         self.IP = host
-        self.electrolyzer = ModbusClient(host=host)
+        self.electrolyzer = ModbusClient(host=host,timeout=1) #Timeout doesn't raise an error
+
+    def identify(self):
+        self.electrolyzer.write_single_register(5,1)
+        time.sleep(1)
+        self.electrolyzer.write_single_register(5,0)
 
     def display_last_configuration_result(self):
         reg = self.electrolyzer.read_input_registers(4002, 1)
@@ -300,75 +305,84 @@ class ElectrolyzerModbusController:
     def write_save_dryer_configuration(self):
         self.electrolyzer.write_single_register(6022, 1)
 
+    def close(self):
+        self.electrolyzer.close()
+
 #================================================================================================ 
 
 if __name__ == "__main__":
-    elec = ElectrolyzerModbusController(host='10.1.10.231')
-    actuate = False
+    ip_start=111
+    ips = [f'192.168.1.{ip_start+ip}'for ip in range(8)]
 
-    #stop the electrolyzer
-    if actuate: elec.write_stop_electrolyser()
+    for ip in ips:
+        elec = ElectrolyzerModbusController(host=ip)
+        elec.identify()
+        print(elec.display_warning_codes())
+        print(elec.display_error_codes())
+        elec.close()
+    # #stop the electrolyzer
+    # if actuate: elec.write_stop_electrolyser()
 
-    production_rate = input("Enter the production rate between 60 and 100%: ")
-    elec.write_production_rate(float(production_rate))
+    # production_rate = input("Enter the production rate between 60 and 100%: ")
+    # elec.write_production_rate(float(production_rate))
 
-    with open('electrolyzer_data.csv', mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([
-            "Time", 
-            "Electrolyzer Status", 
-            "Preheat Status", 
-            "Production Rate (%)", 
-            "Electrolyte Temperature (°C)", 
-            "Stack Voltage (V)", 
-            "Stack Current (A)", 
-            "Stack Power (kW)",
-            "Stack H2 Flow Rate (NL/hour)"
-        ])
+    # with open('electrolyzer_data.csv', mode='w', newline='') as file:
+    #     writer = csv.writer(file)
+    #     writer.writerow([
+    #         "Time", 
+    #         "Electrolyzer Status", 
+    #         "Preheat Status", 
+    #         "Production Rate (%)", 
+    #         "Electrolyte Temperature (°C)", 
+    #         "Stack Voltage (V)", 
+    #         "Stack Current (A)", 
+    #         "Stack Power (kW)",
+    #         "Stack H2 Flow Rate (NL/hour)"
+    #     ])
 
-        i = 0
-        while True:
-            if i == 10:
-                if actuate: elec.write_start_electrolyser()
-                pass
+    #     i = 0
+    #     while True:
+    #         if i == 10:
+    #             if actuate: elec.write_start_electrolyser()
+    #             pass
 
-            curr_time = datetime.now()
-            stack_voltage = elec.display_stack_voltage()
-            stack_current = elec.display_stack_current()
-            stack_power = (stack_voltage * stack_current) / 1000  # Convert to kW
-            electrolyzer_ison = elec.display_start_stop_electrolyser()
-            production_rate = elec.display_production_rate()
-            preheat_status = elec.display_preheat()
-            electrolyte_temp = elec.display_electrolyte_temperature()
-            stack_flow_rate = elec.display_stack_H2_flow_rate()
-            dryer_state = elec.display_dryer_state()
+    #         curr_time = datetime.now()
+    #         stack_voltage = elec.display_stack_voltage()
+    #         stack_current = elec.display_stack_current()
+    #         stack_power = (stack_voltage * stack_current) / 1000  # Convert to kW
+    #         electrolyzer_ison = elec.display_start_stop_electrolyser()
+    #         production_rate = elec.display_production_rate()
+    #         preheat_status = elec.display_preheat()
+    #         electrolyte_temp = elec.display_electrolyte_temperature()
+    #         stack_flow_rate = elec.display_stack_H2_flow_rate()
+    #         dryer_state = elec.display_dryer_state()
 
 
-            print("=" * 30)
-            print(f"Current Time: {curr_time}")
-            print(f"Electrolyzer Status: {'ON' if electrolyzer_ison else 'OFF'}")
-            print(f"Preheat Status: {'ON' if preheat_status else 'OFF'}")
-            print(f"Production Rate: {production_rate}%")
-            print(f"Electrolyte Temperature: {electrolyte_temp} °C")
-            print(f"Stack Voltage: {stack_voltage} V")
-            print(f"Stack Current: {stack_current} A")
-            print(f"Stack Power: {stack_power} kW")
-            print(f"Stack H2 Flow Rate: {stack_flow_rate} NL/hour")
-            print(f"Dryer State: {dryer_state}")
-            print("=" * 30)
+    #         print("=" * 30)
+    #         print(f"Current Time: {curr_time}")
+    #         print(f"Electrolyzer Status: {'ON' if electrolyzer_ison else 'OFF'}")
+    #         print(f"Preheat Status: {'ON' if preheat_status else 'OFF'}")
+    #         print(f"Production Rate: {production_rate}%")
+    #         print(f"Electrolyte Temperature: {electrolyte_temp} °C")
+    #         print(f"Stack Voltage: {stack_voltage} V")
+    #         print(f"Stack Current: {stack_current} A")
+    #         print(f"Stack Power: {stack_power} kW")
+    #         print(f"Stack H2 Flow Rate: {stack_flow_rate} NL/hour")
+    #         print(f"Dryer State: {dryer_state}")
+    #         print("=" * 30)
 
-            # writer.writerow([
-            #     curr_time.strftime('%Y-%m-%d %H:%M:%S'), 
-            #     "ON" if electrolyzer_ison else "OFF", 
-            #     "ON" if preheat_status else "OFF", 
-            #     production_rate, 
-            #     electrolyte_temp, 
-            #     stack_voltage, 
-            #     stack_current, 
-            #     stack_power,
-            #     stack_flow_rate
-            # ])
+    #         # writer.writerow([
+    #         #     curr_time.strftime('%Y-%m-%d %H:%M:%S'), 
+    #         #     "ON" if electrolyzer_ison else "OFF", 
+    #         #     "ON" if preheat_status else "OFF", 
+    #         #     production_rate, 
+    #         #     electrolyte_temp, 
+    #         #     stack_voltage, 
+    #         #     stack_current, 
+    #         #     stack_power,
+    #         #     stack_flow_rate
+    #         # ])
 
-            # file.flush()
-            # i += 1
-            # time.sleep(1)  # Add a delay to avoid spamming the log file
+    #         # file.flush()
+    #         # i += 1
+    #         # time.sleep(1)  # Add a delay to avoid spamming the log file

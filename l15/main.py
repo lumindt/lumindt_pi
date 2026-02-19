@@ -17,10 +17,9 @@ import config
 from sql_uploader import SQLUploader
 
 # Starting IP then add 1 for each additional unit
-starting_ip = 104
-ENAPTER_HOSTS = [f"10.1.10.{starting_ip + i}" for i in range(8)]  # E64–E71
-DRYER_HOSTS = [f"10.1.10.{starting_ip}", f"10.1.10.{starting_ip + 4}"]
-
+starting_ip = 111
+ENAPTER_HOSTS = [f"192.168.1.{starting_ip + i}" for i in range(8)]  # E64–E71
+DRYER_HOSTS = [f"192.168.1.{starting_ip}", f"192.168.1.{starting_ip + 4}"]
 
 # HES_in=gpiozero.OutputDevice(pin=17)
 # HES_out=gpiozero.OutputDevice(pin=27)
@@ -41,7 +40,7 @@ def safe_float(val, default=0.0):
         return default
 
 class L15System:
-    def __init__(self,vessel=1):
+    def __init__(self,vessel=1,negative_temps=False):
         ###################### Vessel Logic ################################
         # Vessel 1: HES06
         # Vessel 2: C5
@@ -60,12 +59,15 @@ class L15System:
         ###################### Sensor Logic ################################
         spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
         self.LTC=LTC2983(spi)
+        self.temps_negative = negative_temps
         ####################################################################
 
         self.mode = "idle"
         self.controllers = {ip: ElectrolyzerModbusController(host=ip) for ip in ENAPTER_HOSTS}
         self.dryers = {ip: ElectrolyzerModbusController(host=ip) for ip in DRYER_HOSTS}
-        self.sql_uploader = SQLUploader()
+        self.sql_uploader = SQLUploader(
+            # table_name="L15_V2" # NEW TABLE (Capitalization doesn't matter)
+        )
         #require test id if only enter isd pressed
         self.test_id = ""
         while not self.test_id:
@@ -266,6 +268,7 @@ class L15System:
         fc_phase = self.fuelcell.get_phase() or "N/A"
         fc_faults = self.fuelcell.get_fault_codes() or []
         fc_consumption = safe_float(self.fuelcell.get_H2_consumption())
+        # fc_consumption = 0.0 # Temporarily disabled due to timing issues
         return dict(fc_power_kW=fc_power, fc_voltage_V=fc_voltage,
                     fc_target_power_kW=fc_target_power, fc_target_voltage_V=fc_target_voltage,
                     fc_phase=fc_phase, fc_faults=fc_faults, fc_consumption_kg=fc_consumption)
@@ -282,13 +285,17 @@ class L15System:
             print(f"[WARN] Alicat read failed: {e}")
             outputs.update({"mass_flow_gps": -2.0, "volumetric_flow_slpm": -2.0})
         try:
+            ref = self.LTC.temp(18)
             outputs.update({
                 "V1P": self.LTC.pres(11),
                 "V2P": self.LTC.pres(13),
                 "FCP": self.LTC.pres(12),
                 "ELP": self.LTC.pres(14),
-                "V1T1": self.LTC.temp(2),
-                "V1T2": self.LTC.temp(4),
+                "TREF": ref,
+                "V1T1": 2 * ref - self.LTC.temp(1) if self.temps_negative else self.LTC.temp(1),
+                "V1T2": 2 * ref - self.LTC.temp(2) if self.temps_negative else self.LTC.temp(2),
+                "V1T3": 2 * ref - self.LTC.temp(3) if self.temps_negative else self.LTC.temp(3),
+                "V1T4": 2 * ref - self.LTC.temp(4) if self.temps_negative else self.LTC.temp(4),
             })
         except Exception as e:
             print(f"[WARN] Pressure/Temp read failed: {e}")
@@ -297,8 +304,11 @@ class L15System:
                 "V2P": 0.0,
                 "FCP": 0.0,
                 "ELP": 0.0,
+                "TREF": 0.0,
                 "V1T1": 0.0,
                 "V1T2": 0.0,
+                "V1T3": 0.0,
+                "V1T4": 0.0,
             })
 
         return outputs
@@ -337,17 +347,14 @@ class L15System:
             while not stop_flag.is_set():
                 try:
                     ttt=time.time()
-                    #el = self.read_electrolyzer_data()
-                    el = {} # Disable electrolyzer reads because read time was over 2 minutes (>145s)
-                    # UPDATE: Only slow if IP addresses is wrong
+                    # Only read relevant data based on mode, can cause delays if one mode's device is offline
+                    el = self.read_electrolyzer_data() if self.mode == "charge" else {}
                     debug_thread['el_time']=round(time.time()-ttt,6)
-                    fc = self.read_fuelcell_block()
-                    # fc = {} # Not an issue but could be slow
+                    fc = self.read_fuelcell_block() if self.mode == "discharge" else {}
                     debug_thread['fc_time']=round(time.time()-ttt,6)
                     st = self.read_storage_data()
                     debug_thread['st_time']=round(time.time()-ttt,6)
-                    dy = self.read_dryer_states()
-                    # dryers = [] # See Above
+                    dy = self.read_dryer_states() if self.mode == "charge" else []
                     debug_thread['dy_time']=round(time.time()-ttt,6)
                     latest.update({"el": el, "fc": fc, "st": st, "dy": dy})
                     debug_thread['counter']=count
@@ -377,7 +384,7 @@ class L15System:
                 print(f"Timing: EL - {debug_copy['el_time']}s | FC - {debug_copy['fc_time']}s | ST - {debug_copy['st_time']}s | DY - {debug_copy['dy_time']}s | Cycles - {debug_copy['counter']}\n")
 
                 print(f"Valves: In - {bool(self.vessel_in.value)} | Out - {bool(self.vessel_out.value)}")
-                print(f"Temps: T1 - {st.get('V1T1',0):>6.2f} C | T2 - {st.get('V1T2',0):>6.2f} C\n")
+                print(f"Temps: TR - {st.get('TREF',0):>6.2f} C | T1 - {st.get('V1T1',0):>6.2f} C | T2 - {st.get('V1T2',0):>6.2f} C | T3 - {st.get('V1T3',0):>6.2f} C | T4 - {st.get('V1T4',0):>6.2f} C\n")
                 print(f"Pressures: V1 - {st.get('V1P',0):>6.2f} barG | V2 - {st.get('V2P',0):>6.2f} barG | FC - {st.get('FCP',0):>6.2f} barG | EL - {st.get('ELP',0):>6.2f} barG\n")
                 
                 print("ELECTROLYZER STATUS:")
@@ -518,7 +525,7 @@ class L15System:
         print("System safely stopped.")
 
 if __name__ == "__main__":
-    system = L15System()
+    system = L15System(vessel=1, negative_temps=True)  # Set vessel number and temp logic here
     try:
         print("Select mode:")
         print("1. Charge (Electrolyzers ON)")
